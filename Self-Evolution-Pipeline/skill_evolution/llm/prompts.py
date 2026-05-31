@@ -78,6 +78,7 @@ EXECUTION_ANALYSIS_SCHEMA = {
                     "target_skills": {"type": "array", "items": {"type": "string"}},
                     "category": {"type": "string", "enum": ["tool_guide", "workflow", "reference"]},
                     "evidence_sessions": {"type": "array", "items": {"type": "string"}},
+                    "evidence_session_paths": {"type": "array", "items": {"type": "string"}},
                 },
                 "required": ["type", "direction"],
             },

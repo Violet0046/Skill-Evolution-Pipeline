@@ -1,21 +1,24 @@
 """SkillEvolver: processes evolution_suggestions serially to produce new skill versions.
 
-Reference: OpenSpace evolver.py _evolve_fix() / _evolve_derived() flow.
-Simplified: single LLM call per suggestion (no agent loop, no retry for now).
+Uses LLMWithTools for multi-turn tool-use conversations. The LLM can call
+read_session_summary, read_session_messages, read_session_tool_detail to
+examine the evidence sessions before producing edits.
 """
 from __future__ import annotations
 
 import json
-import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
 from skill_evolution.config.prompts import PromptLoader
 from skill_evolution.config.settings import LLMConfig
+from skill_evolution.llm.base import LLMWithTools
 from skill_evolution.llm.prompts import EVOLUTION_COMPLETE, EVOLUTION_FAILED
+from skill_evolution.llm.tools import SESSION_TOOLS, SessionToolRegistry
 from skill_evolution.llm.evidence_analyzer import ExecutionAnalysis
 from skill_evolution.models.evolution import EvolutionSuggestion, EvolutionType
+from skill_evolution.models.session import CanonicalSession
 from skill_evolution.evolution.patch import (
     fix_skill, derive_skill, create_skill,
     extract_change_summary, strip_markdown_fences,
@@ -56,19 +59,15 @@ class EvolutionRunResult:
 class SkillEvolver:
     """Processes evolution_suggestions serially, producing new skill versions."""
 
-    def __init__(self, config: LLMConfig, prompt_loader: PromptLoader | None = None):
+    def __init__(
+        self,
+        config: LLMConfig,
+        prompt_loader: PromptLoader | None = None,
+        sessions: list[CanonicalSession] | None = None,
+    ):
         self.config = config
-        self._client = None
         self._prompt_loader = prompt_loader
-
-    def _get_client(self):
-        if self._client is None:
-            if self.config.provider == "anthropic":
-                import anthropic
-                self._client = anthropic.Anthropic()
-            else:
-                raise ValueError(f"Unsupported LLM provider: {self.config.provider}")
-        return self._client
+        self._sessions = sessions or []
 
     def evolve(
         self,
@@ -77,17 +76,7 @@ class SkillEvolver:
         skill_dir: Optional[Path] = None,
         output_dir: Optional[Path] = None,
     ) -> EvolutionRunResult:
-        """Process all evolution_suggestions from an ExecutionAnalysis.
-
-        Args:
-            analysis: ExecutionAnalysis with evolution_suggestions
-            skill_content: current skill content (SKILL.md text)
-            skill_dir: path to skill directory on disk (for fix_skill)
-            output_dir: directory to save evolved skills (for derive_skill)
-
-        Returns:
-            EvolutionRunResult with per-suggestion results
-        """
+        """Process all evolution_suggestions from an ExecutionAnalysis."""
         run_result = EvolutionRunResult(analysis=analysis)
 
         if not analysis.evolution_suggestions:
@@ -122,18 +111,28 @@ class SkillEvolver:
         """Process a single evolution suggestion."""
         result = EvolutionResult(suggestion=suggestion)
 
+        # Re-read SKILL.md from disk if available (previous suggestion may have modified it)
+        current_content = skill_content
+        if skill_dir and skill_dir.is_dir():
+            skill_file = skill_dir / "SKILL.md"
+            if skill_file.exists():
+                current_content = skill_file.read_text(encoding="utf-8")
+
         # Build prompt based on type
         if suggestion.evolution_type == EvolutionType.FIX:
-            prompt = self._build_fix_prompt(suggestion, skill_content)
+            prompt = self._build_fix_prompt(suggestion, current_content)
         elif suggestion.evolution_type == EvolutionType.DERIVED:
-            prompt = self._build_derived_prompt(suggestion, skill_content)
+            prompt = self._build_derived_prompt(suggestion, current_content)
         else:
             result.error = f"Unsupported evolution type: {suggestion.evolution_type}"
             return result
 
-        # Call LLM
+        # Build session list for this suggestion (evidence sessions only)
+        evidence_sessions = self._resolve_evidence_sessions(suggestion)
+
+        # Call LLM with tools
         try:
-            llm_output = self._call_llm(prompt)
+            llm_output = self._call_llm_with_tools(prompt, evidence_sessions)
         except Exception as e:
             result.error = f"LLM call failed: {e}"
             return result
@@ -175,14 +174,67 @@ class SkillEvolver:
 
         return result
 
+    def _resolve_evidence_sessions(self, suggestion: EvolutionSuggestion) -> list[CanonicalSession]:
+        """Resolve evidence sessions from paths or IDs."""
+        if not self._sessions:
+            return []
+
+        # Build lookup by path and ID
+        by_path = {}
+        by_id = {}
+        for s in self._sessions:
+            by_id[s.session_id] = s
+            by_id[s.session_id[:12]] = s
+            path = s.metadata.get("file_path", "")
+            if path:
+                by_path[path] = s
+
+        resolved = []
+        seen = set()
+
+        # First try matching by paths
+        for path in suggestion.evidence_session_paths:
+            if path in by_path and path not in seen:
+                resolved.append(by_path[path])
+                seen.add(path)
+
+        # Then try matching by IDs
+        for sid in suggestion.evidence_sessions:
+            if sid in by_id and sid not in seen:
+                resolved.append(by_id[sid])
+                seen.add(sid)
+
+        return resolved
+
+    def _call_llm_with_tools(
+        self, user_prompt: str, evidence_sessions: list[CanonicalSession]
+    ) -> str:
+        """Call LLM with tool-use support for examining sessions."""
+        system_prompt = self._prompt_loader.load("evolution_system") if self._prompt_loader else ""
+
+        # Use only evidence sessions for tools (not all sessions)
+        registry = SessionToolRegistry(evidence_sessions)
+        llm = LLMWithTools(self.config, tools=SESSION_TOOLS)
+
+        for tool_def in SESSION_TOOLS:
+            name = tool_def["name"]
+            handler = registry.get_handler(name)
+            if handler:
+                llm.register_tool(name, handler)
+
+        messages = [{"role": "user", "content": user_prompt}]
+        return llm.run_conversation(system=system_prompt, messages=messages, max_rounds=5)
+
     def _build_fix_prompt(self, suggestion: EvolutionSuggestion, skill_content: str) -> str:
         """Build the FIX evolution prompt."""
         failure_context = self._format_failure_context(suggestion)
+        heading_index = self._extract_headings(skill_content)
         template = self._prompt_loader.load("evolution_fix") if self._prompt_loader else ""
         return template.format(
             current_content=truncate(skill_content, 12000),
             direction=suggestion.direction,
             failure_context=failure_context,
+            heading_index=heading_index,
             evolution_complete=EVOLUTION_COMPLETE,
             evolution_failed=EVOLUTION_FAILED,
         )
@@ -190,22 +242,45 @@ class SkillEvolver:
     def _build_derived_prompt(self, suggestion: EvolutionSuggestion, skill_content: str) -> str:
         """Build the DERIVED evolution prompt."""
         execution_insights = self._format_failure_context(suggestion)
+        heading_index = self._extract_headings(skill_content)
         template = self._prompt_loader.load("evolution_derived") if self._prompt_loader else ""
         return template.format(
             parent_content=truncate(skill_content, 12000),
             direction=suggestion.direction,
             execution_insights=execution_insights,
+            heading_index=heading_index,
             evolution_complete=EVOLUTION_COMPLETE,
             evolution_failed=EVOLUTION_FAILED,
         )
 
+    @staticmethod
+    def _extract_headings(content: str) -> str:
+        """Extract markdown headings from content for anchor reference."""
+        headings = []
+        for line in content.split("\n"):
+            stripped = line.strip()
+            if stripped.startswith("#"):
+                headings.append(stripped)
+        if not headings:
+            return "(no headings found)"
+        return "\n".join(headings)
+
     def _format_failure_context(self, suggestion: EvolutionSuggestion) -> str:
-        """Format evidence sessions into failure context text."""
-        if not suggestion.evidence_sessions:
+        """Format evidence sessions into failure context text with paths."""
+        if not suggestion.evidence_sessions and not suggestion.evidence_session_paths:
             return "(No specific session evidence available)"
+
         lines = [f"Evidence from {len(suggestion.evidence_sessions)} session(s):"]
-        for sid in suggestion.evidence_sessions:
-            lines.append(f"  - Session {sid[:12]}")
+        for i, sid in enumerate(suggestion.evidence_sessions):
+            path = suggestion.evidence_session_paths[i] if i < len(suggestion.evidence_session_paths) else ""
+            if path:
+                lines.append(f"  - Session {sid[:12]} (path: {path})")
+            else:
+                lines.append(f"  - Session {sid[:12]}")
+
+        lines.append("")
+        lines.append("You can use read_session_summary, read_session_messages, "
+                      "and read_session_tool_detail tools to examine these sessions in detail.")
         return "\n".join(lines)
 
     def _apply_fix(self, content: str, skill_dir: Optional[Path]) -> SkillEditResult:
@@ -233,28 +308,3 @@ class SkillEvolver:
             return derive_skill(skill_dir, target_dir, content)
         else:
             return create_skill(target_dir, content)
-
-    def _call_llm(self, user_prompt: str) -> str:
-        """Call the LLM with retry logic."""
-        client = self._get_client()
-        last_error = None
-
-        for attempt in range(self.config.max_retries):
-            try:
-                if self.config.provider == "anthropic":
-                    response = client.messages.create(
-                        model=self.config.model,
-                        max_tokens=self.config.max_tokens,
-                        temperature=self.config.temperature,
-                        system="You are a skill editor. Output only the requested content, no explanations.",
-                        messages=[{"role": "user", "content": user_prompt}],
-                    )
-                    return response.content[0].text
-                else:
-                    raise ValueError(f"Unsupported provider: {self.config.provider}")
-            except Exception as e:
-                last_error = e
-                if attempt < self.config.max_retries - 1:
-                    time.sleep(self.config.retry_delay * (attempt + 1))
-
-        raise RuntimeError(f"LLM call failed after {self.config.max_retries} attempts: {last_error}")

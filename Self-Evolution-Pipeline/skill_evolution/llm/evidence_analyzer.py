@@ -1,17 +1,20 @@
-"""EvidenceAnalyzer: one LLM call to analyze all evidence and produce ExecutionAnalysis.
+"""EvidenceAnalyzer: LLM with tool-use to analyze evidence and produce ExecutionAnalysis.
 
-Reference: OpenSpace skill_engine_prompts.py pattern.
-Single call, structured JSON output.
+Uses LLMWithTools for multi-turn tool-use conversations. The LLM can call
+read_session_summary, read_session_messages, read_session_tool_detail to
+dive deeper into specific sessions.
 """
 from __future__ import annotations
 
 import json
-import time
-from typing import Optional
+import re
 
 from skill_evolution.config.prompts import PromptLoader
 from skill_evolution.config.settings import LLMConfig
+from skill_evolution.llm.base import LLMWithTools
+from skill_evolution.llm.tools import SESSION_TOOLS, SessionToolRegistry
 from skill_evolution.models.evolution import EvolutionSuggestion, EvolutionType
+from skill_evolution.models.session import CanonicalSession
 
 
 class ExecutionAnalysis:
@@ -64,24 +67,20 @@ class ExecutionAnalysis:
 
 
 class EvidenceAnalyzer:
-    """Analyzes evidence set via a single LLM call and returns ExecutionAnalysis."""
+    """Analyzes evidence set via LLM with tool-use support."""
 
-    def __init__(self, config: LLMConfig, prompt_loader: PromptLoader | None = None):
+    def __init__(
+        self,
+        config: LLMConfig,
+        prompt_loader: PromptLoader | None = None,
+        sessions: list[CanonicalSession] | None = None,
+    ):
         self.config = config
-        self._client = None
         self._prompt_loader = prompt_loader
-
-    def _get_client(self):
-        if self._client is None:
-            if self.config.provider == "anthropic":
-                import anthropic
-                self._client = anthropic.Anthropic()
-            else:
-                raise ValueError(f"Unsupported LLM provider: {self.config.provider}")
-        return self._client
+        self._sessions = sessions or []
 
     def analyze(self, evidence_text: str, skill_name: str, session_count: int) -> ExecutionAnalysis:
-        """Send evidence to LLM and parse ExecutionAnalysis from response."""
+        """Send evidence to LLM with tools and parse ExecutionAnalysis from response."""
         system_prompt = self._prompt_loader.load("evidence_analysis_system") if self._prompt_loader else ""
         user_template = self._prompt_loader.load("evidence_analysis_user") if self._prompt_loader else ""
 
@@ -91,34 +90,23 @@ class EvidenceAnalyzer:
             evidence_text=evidence_text,
         )
 
-        response_text = self._call_llm(user_prompt, system_prompt)
+        # Set up LLM with tools
+        registry = SessionToolRegistry(self._sessions)
+        llm = LLMWithTools(self.config, tools=SESSION_TOOLS)
+
+        # Register tool handlers
+        for tool_def in SESSION_TOOLS:
+            name = tool_def["name"]
+            handler = registry.get_handler(name)
+            if handler:
+                llm.register_tool(name, handler)
+
+        # Run multi-turn conversation
+        messages = [{"role": "user", "content": user_prompt}]
+        response_text = llm.run_conversation(system=system_prompt, messages=messages)
+
         parsed = self._parse_response(response_text)
         return ExecutionAnalysis(parsed)
-
-    def _call_llm(self, user_prompt: str, system_prompt: str = "") -> str:
-        """Call the LLM with retry logic."""
-        client = self._get_client()
-        last_error = None
-
-        for attempt in range(self.config.max_retries):
-            try:
-                if self.config.provider == "anthropic":
-                    response = client.messages.create(
-                        model=self.config.model,
-                        max_tokens=self.config.max_tokens,
-                        temperature=self.config.temperature,
-                        system=system_prompt,
-                        messages=[{"role": "user", "content": user_prompt}],
-                    )
-                    return response.content[0].text
-                else:
-                    raise ValueError(f"Unsupported provider: {self.config.provider}")
-            except Exception as e:
-                last_error = e
-                if attempt < self.config.max_retries - 1:
-                    time.sleep(self.config.retry_delay * (attempt + 1))
-
-        raise RuntimeError(f"LLM call failed after {self.config.max_retries} attempts: {last_error}")
 
     def _parse_response(self, response_text: str) -> dict:
         """Extract JSON from LLM response text."""
@@ -129,7 +117,6 @@ class EvidenceAnalyzer:
             pass
 
         # try extracting JSON from markdown code block
-        import re
         json_match = re.search(r"```(?:json)?\s*\n(.*?)\n```", response_text, re.DOTALL)
         if json_match:
             try:

@@ -185,9 +185,10 @@ def run_analysis(
     skill_name: str,
     session_count: int,
     prompt_loader: PromptLoader,
+    sessions: list[CanonicalSession] | None = None,
 ) -> ExecutionAnalysis:
     """LLM call to analyze evidence set → ExecutionAnalysis."""
-    analyzer = EvidenceAnalyzer(config.llm, prompt_loader=prompt_loader)
+    analyzer = EvidenceAnalyzer(config.llm, prompt_loader=prompt_loader, sessions=sessions)
     analysis = analyzer.analyze(evidence_text, skill_name, session_count)
 
     print(f"\n[ANALYSIS] LLM analysis complete:")
@@ -205,13 +206,14 @@ def run_evolution(
     skill_dir: Path | None,
     staging_dir: Path,
     prompt_loader: PromptLoader,
+    sessions: list[CanonicalSession] | None = None,
 ) -> None:
     """Process evolution_suggestions serially → new skill versions."""
     if not analysis.evolution_suggestions:
         print(f"\n[EVOLVE] No evolution suggestions — skipping")
         return
 
-    evolver = SkillEvolver(config.llm, prompt_loader=prompt_loader)
+    evolver = SkillEvolver(config.llm, prompt_loader=prompt_loader, sessions=sessions)
     run_result = evolver.evolve(
         analysis=analysis,
         skill_content=skill_content,
@@ -297,6 +299,7 @@ def run_pipeline(config: PipelineConfig, stage: str = "all") -> None:
 
         analysis = run_analysis(
             config, evidence_text, config.skill_name, len(analyses), prompt_loader,
+            sessions=evolution_set,
         )
         save_json(analysis.to_dict(), output_dir / "execution_analysis.json")
 
@@ -304,7 +307,7 @@ def run_pipeline(config: PipelineConfig, stage: str = "all") -> None:
         skill_content = config.paths.resolve_skill_content(config.skill_name)
         skill_dir = config.paths.resolve_skill_dir(config.skill_name)
 
-        run_result = run_evolution(config, analysis, skill_content, skill_dir, staging_dir, prompt_loader)
+        run_result = run_evolution(config, analysis, skill_content, skill_dir, staging_dir, prompt_loader, sessions=evolution_set)
 
         if run_result:
             save_json(

@@ -27,8 +27,14 @@ class ProtoAnalysis:
 
     # metadata for traceability
     source_file: str = ""               # original JSONL filename
+    session_path: str = ""              # full path to session JSONL (for tool_use)
     quality_score: int = 0
     relevance_level: str = ""
+
+    # richer session metadata for LLM indexing
+    message_count: int = 0
+    tool_call_count: int = 0
+    key_tools: list[str] = field(default_factory=list)  # deduplicated tool names
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -41,6 +47,10 @@ class ProtoAnalysis:
             "task": self.task_title or self.task_description[:80],
             "tools": self.tool_sequence,
             "tokens": self.token_usage,
+            "msg_count": self.message_count,
+            "tc_count": self.tool_call_count,
+            "key_tools": self.key_tools,
+            "session_path": self.session_path,
         }
         if self.failure_reason:
             d["fail"] = self.failure_reason[:100]

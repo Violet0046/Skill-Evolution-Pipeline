@@ -7,6 +7,12 @@ A skill is a markdown file (SKILL.md) containing instructions for an AI agent.
 
 {current_content}
 
+## Available Headings (for @@ anchor reference)
+
+These are the exact headings in the skill file. You MUST copy them verbatim as @@ anchors:
+
+{heading_index}
+
 ## What needs fixing
 
 {direction}
@@ -19,14 +25,17 @@ These are recent task executions where this skill was involved:
 
 ## Instructions
 
-1. Analyze the failure context and identify the root cause in the skill's
-   instructions (wrong parameters, missing steps, incorrect rules, etc.).
-2. Fix the skill to address the identified issues.
-3. Preserve the overall structure and YAML frontmatter format (``---`` fences)
+1. Examine the failure context below. If you need more detail, use the available
+   tools (read_session_summary, read_session_messages, read_session_tool_detail)
+   to look at the evidence sessions in depth.
+2. Identify the root cause in the skill's instructions (wrong parameters, missing
+   steps, incorrect rules, etc.).
+3. Fix the skill to address the identified issues.
+4. Preserve the overall structure and YAML frontmatter format (``---`` fences)
    in SKILL.md.
-4. Keep ``name`` and ``description`` in frontmatter; update ``description``
+5. Keep ``name`` and ``description`` in frontmatter; update ``description``
    only if the skill's purpose has changed.
-5. Be surgical — fix what's broken without unnecessary rewrites.
+6. Be surgical — fix what's broken without unnecessary rewrites.
 
 ## Output format
 
@@ -51,9 +60,11 @@ below.
 *** End Patch
 
 **How ``@@`` anchor lines work**:
-- Write ``@@`` followed by a single line that already exists verbatim in the
+- Write ``@@`` followed by a single line that already exists **verbatim** in the
   file. The system searches forward for this line and applies the changes
   immediately after locating it.
+- CRITICAL: Copy the anchor text EXACTLY from the "Available Headings" list above,
+  or from the skill content. Do NOT paraphrase or invent headings.
 - After the ``@@`` line, prefix every line with exactly one character:
   ``-`` = delete this old line, ``+`` = insert this new line,
   `` `` (one space) = keep this line unchanged (context).

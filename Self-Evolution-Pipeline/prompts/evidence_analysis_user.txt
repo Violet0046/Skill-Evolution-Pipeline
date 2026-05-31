@@ -48,14 +48,16 @@
       "direction": "<具体的修复方向，说明修什么、为什么修>",
       "target_skills": ["{skill_name}"],
       "category": "workflow",
-      "evidence_sessions": ["<支撑此建议的 session_id>"]
+      "evidence_sessions": ["<支撑此建议的 session_id>"],
+      "evidence_session_paths": ["<对应 session 的 JSONL 文件路径>"]
     }},
     {{
       "type": "derived",
       "direction": "<具体的增强方向，说明增强什么、预期效果>",
       "target_skills": ["{skill_name}"],
       "category": "workflow",
-      "evidence_sessions": ["<支撑此建议的 session_id>"]
+      "evidence_sessions": ["<支撑此建议的 session_id>"],
+      "evidence_session_paths": ["<对应 session 的 JSONL 文件路径>"]
     }}
   ],
 
@@ -72,3 +74,4 @@
 - 如果证据显示 Skill 运行良好无需改进，evolution_suggestions 为 []
 - 每条 suggestion 的 direction 必须足够具体，能直接指导 Skill 修改
 - category 可选值：tool_guide / workflow / reference
+- evidence_session_paths 填入证据集中对应 session 的 Session 路径字段值

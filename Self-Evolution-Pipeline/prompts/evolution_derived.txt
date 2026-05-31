@@ -8,6 +8,12 @@ A skill is a markdown file (SKILL.md) containing instructions for an AI agent.
 
 {parent_content}
 
+## Available Headings (for @@ anchor reference)
+
+These are the exact headings in the skill file. You MUST copy them verbatim as @@ anchors:
+
+{heading_index}
+
 ## Enhancement direction
 
 {direction}
@@ -20,16 +26,19 @@ These are recent task executions that informed this enhancement:
 
 ## Instructions
 
-1. Create an enhanced version that addresses the improvement direction.
-2. Give the new skill a **different, concise name** (in frontmatter ``name:`` field)
+1. Review the execution insights below. If you need more detail, use the available
+   tools (read_session_summary, read_session_messages, read_session_tool_detail)
+   to examine the evidence sessions in depth.
+2. Create an enhanced version that addresses the improvement direction.
+3. Give the new skill a **different, concise name** (in frontmatter ``name:`` field)
    that reflects its specialization or enhancement.
    - Name MUST be <=50 characters, lowercase, hyphens only.
    - Do NOT just append "-enhanced" or "-merged" to the parent name.
-3. Update ``description`` to reflect the new capability.
-4. You may restructure, add steps, improve error handling, or broaden/narrow scope.
-5. Maintain the YAML frontmatter format (``---`` fences with ``name`` and
+4. Update ``description`` to reflect the new capability.
+5. You may restructure, add steps, improve error handling, or broaden/narrow scope.
+6. Maintain the YAML frontmatter format (``---`` fences with ``name`` and
    ``description`` at minimum).
-6. The derived skill should be self-contained.
+7. The derived skill should be self-contained.
 
 ## Output format
 
@@ -50,6 +59,13 @@ CHANGE_SUMMARY: <one-sentence description of enhancement>
 -<old line>
 +<new line>
 *** End Patch
+
+**How ``@@`` anchor lines work**:
+- Write ``@@`` followed by a single line that already exists **verbatim** in the
+  file. The system searches forward for this line and applies the changes
+  immediately after locating it.
+- CRITICAL: Copy the anchor text EXACTLY from the "Available Headings" list above,
+  or from the skill content. Do NOT paraphrase or invent headings.
 
 ### Format B: Full rewrite (for major restructure)
 

@@ -62,6 +62,9 @@ class EvidenceBuilder:
             lines.append(f"- 任务: {a.task_title or a.task_description[:80]}")
             lines.append(f"- 工具序列: {a.tool_sequence}")
             lines.append(f"- Token: {a.token_usage}")
+            lines.append(f"- 消息数: {a.message_count}, 工具调用数: {a.tool_call_count}")
+            lines.append(f"- 主要工具: {', '.join(a.key_tools)}")
+            lines.append(f"- Session 路径: {a.session_path}")
 
             if a.failure_reason:
                 lines.append(f"- 失败原因: {a.failure_reason[:150]}")

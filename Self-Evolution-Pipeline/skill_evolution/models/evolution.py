@@ -34,6 +34,7 @@ class EvolutionSuggestion:
     target_skill_ids: list[str] = field(default_factory=list)
     category: Optional[SkillCategory] = None
     evidence_sessions: list[str] = field(default_factory=list)  # session_ids that support this
+    evidence_session_paths: list[str] = field(default_factory=list)  # corresponding file paths
 
     @property
     def target_skill_id(self) -> str:
@@ -46,6 +47,7 @@ class EvolutionSuggestion:
             "target_skills": self.target_skill_ids,
             "category": self.category.value if self.category else None,
             "evidence_sessions": self.evidence_sessions,
+            "evidence_session_paths": self.evidence_session_paths,
         }
 
     @classmethod
@@ -62,4 +64,5 @@ class EvolutionSuggestion:
             target_skill_ids=data.get("target_skills", []),
             category=cat,
             evidence_sessions=data.get("evidence_sessions", []),
+            evidence_session_paths=data.get("evidence_session_paths", []),
         )

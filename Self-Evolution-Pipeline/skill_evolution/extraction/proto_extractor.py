@@ -43,8 +43,14 @@ class ProtoExtractor:
 
         # metadata
         pa.source_file = session.metadata.get("file_path", "")
+        pa.session_path = session.metadata.get("file_path", "")
         pa.quality_score = session.feedback.quality_score
         pa.relevance_level = session.feedback.relevance_level
+
+        # richer session metadata
+        pa.message_count = len(session.messages)
+        pa.tool_call_count = session.execution.total_tool_calls
+        pa.key_tools = self._extract_key_tools(session)
 
         return pa
 
@@ -66,6 +72,18 @@ class ProtoExtractor:
                 compact.append(name)
 
         return "→".join(compact)
+
+    def _extract_key_tools(self, session: CanonicalSession) -> list[str]:
+        """Extract deduplicated tool names used in this session."""
+        seen = set()
+        tools = []
+        for msg in session.messages:
+            if msg.role == MessageRole.ASSISTANT:
+                for tc in msg.tool_calls:
+                    if tc.tool_name not in seen:
+                        seen.add(tc.tool_name)
+                        tools.append(tc.tool_name)
+        return tools
 
     def _find_error_tool_calls(self, session: CanonicalSession) -> list[str]:
         """Find tool calls that returned errors."""
