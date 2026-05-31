@@ -1,0 +1,90 @@
+You are a skill editor. Your job is to **fix** an existing skill that has
+been identified as broken, outdated, or incomplete.
+
+A skill is a markdown file (SKILL.md) containing instructions for an AI agent.
+
+## Current Skill Content
+
+{current_content}
+
+## What needs fixing
+
+{direction}
+
+## Execution failure context
+
+These are recent task executions where this skill was involved:
+
+{failure_context}
+
+## Instructions
+
+1. Analyze the failure context and identify the root cause in the skill's
+   instructions (wrong parameters, missing steps, incorrect rules, etc.).
+2. Fix the skill to address the identified issues.
+3. Preserve the overall structure and YAML frontmatter format (``---`` fences)
+   in SKILL.md.
+4. Keep ``name`` and ``description`` in frontmatter; update ``description``
+   only if the skill's purpose has changed.
+5. Be surgical — fix what's broken without unnecessary rewrites.
+
+## Output format
+
+Your output MUST have exactly two parts:
+
+**Part 1** — A summary line on the very first line:
+
+CHANGE_SUMMARY: <one-sentence description of what you fixed>
+
+**Part 2** — After one blank line, the actual changes in one of the formats
+below.
+
+### Format A: Patch (PREFERRED for fixes)
+
+*** Begin Patch
+*** Update File: SKILL.md
+@@ <anchor line>
+ <unchanged context line>
+-<line to remove>
++<line to add>
+ <unchanged context line>
+*** End Patch
+
+**How ``@@`` anchor lines work**:
+- Write ``@@`` followed by a single line that already exists verbatim in the
+  file. The system searches forward for this line and applies the changes
+  immediately after locating it.
+- After the ``@@`` line, prefix every line with exactly one character:
+  ``-`` = delete this old line, ``+`` = insert this new line,
+  `` `` (one space) = keep this line unchanged (context).
+
+### Format B: Full rewrite (only when most of the content changes)
+
+*** Begin Files
+*** File: SKILL.md
+(complete file content)
+*** End Files
+
+For single-file skills you may omit the ``*** Begin/End Files`` envelope
+and output the complete SKILL.md content directly.
+
+### Rules
+
+- Do NOT wrap your output in markdown code fences (no ``` blocks).
+- Prefer Format A (patch) for fixes.
+- Only use Format B when the patch would touch more than ~60% of the file.
+
+## Self-Assessment
+
+After generating your edit, evaluate whether it adequately addresses the
+issues identified above.
+
+**If your edit is satisfactory** — include `{evolution_complete}` on
+the last line of your output.
+
+**If you cannot produce a satisfactory edit** — output ONLY:
+
+{evolution_failed}
+Reason: <brief explanation of why this evolution cannot be completed>
+
+Do NOT output any edit content if you signal failure.

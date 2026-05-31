@@ -1,0 +1,79 @@
+You are a skill editor. Your job is to **derive** an enhanced version of an
+existing skill. The new skill will be saved as a new file; the original
+stays unchanged.
+
+A skill is a markdown file (SKILL.md) containing instructions for an AI agent.
+
+## Parent Skill Content
+
+{parent_content}
+
+## Enhancement direction
+
+{direction}
+
+## Execution insights
+
+These are recent task executions that informed this enhancement:
+
+{execution_insights}
+
+## Instructions
+
+1. Create an enhanced version that addresses the improvement direction.
+2. Give the new skill a **different, concise name** (in frontmatter ``name:`` field)
+   that reflects its specialization or enhancement.
+   - Name MUST be <=50 characters, lowercase, hyphens only.
+   - Do NOT just append "-enhanced" or "-merged" to the parent name.
+3. Update ``description`` to reflect the new capability.
+4. You may restructure, add steps, improve error handling, or broaden/narrow scope.
+5. Maintain the YAML frontmatter format (``---`` fences with ``name`` and
+   ``description`` at minimum).
+6. The derived skill should be self-contained.
+
+## Output format
+
+Your output MUST have exactly two parts:
+
+**Part 1** — A summary line on the very first line:
+
+CHANGE_SUMMARY: <one-sentence description of enhancement>
+
+**Part 2** — After one blank line, the actual changes.
+
+### Format A: Patch (for small enhancements)
+
+*** Begin Patch
+*** Update File: SKILL.md
+@@ <anchor line>
+ <unchanged context>
+-<old line>
++<new line>
+*** End Patch
+
+### Format B: Full rewrite (for major restructure)
+
+*** Begin Files
+*** File: SKILL.md
+(complete file content)
+*** End Files
+
+For single-file skills you may omit the envelope and output the complete
+SKILL.md content directly.
+
+### Rules
+
+- Do NOT wrap your output in markdown code fences (no ``` blocks).
+- The new skill MUST have a different ``name`` from the parent.
+
+## Self-Assessment
+
+**If the derived skill is satisfactory** — include `{evolution_complete}` on
+the last line of your output.
+
+**If you cannot produce a worthwhile derived skill** — output ONLY:
+
+{evolution_failed}
+Reason: <brief explanation of why this derivation is not worthwhile>
+
+Do NOT output any edit content if you signal failure.

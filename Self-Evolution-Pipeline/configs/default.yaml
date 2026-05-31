@@ -1,0 +1,58 @@
+# Skill Evolution Pipeline - Default Configuration
+# Edit this file for each deployment environment.
+
+skill_name: "protocol-agent"
+
+# ── Paths ────────────────────────────────────────────────────────────────────
+# All paths are relative to project_root unless they start with / or drive letter.
+# project_root: empty string = auto-detect from CLI --project-root or parent of pipeline dir.
+paths:
+  project_root: ""
+
+  # Session data
+  session_glob: "agent-*.jsonl"
+  session_index: "{folder_name}/sessions.jsonl"
+
+  # Skill file resolution (searched in order)
+  skill_search_paths:
+    - "{folder_name}/SKILL.md"
+    - "{folder_name}/.claude/skills/{folder_name}/SKILL.md"
+    - "{folder_name}/.claude/skills/{skill_name}/SKILL.md"
+
+  # Map skill_name -> on-disk folder name (when they differ)
+  skill_folder_map:
+    protocol-agent: "协议分析-agent"
+
+  # Output paths
+  output_dir: "output/runs"
+  staging_dir: "output/staging"
+  prompts_dir: "prompts"
+
+# ── LLM ──────────────────────────────────────────────────────────────────────
+llm:
+  provider: "anthropic"
+  model: "mimo-v2.5-pro"
+  max_tokens: 8192
+  temperature: 0.0
+  max_retries: 3
+  retry_delay: 1.0
+
+# ── Extraction ───────────────────────────────────────────────────────────────
+extraction:
+  max_content_length: 500
+
+# ── Sampling / Filtering ────────────────────────────────────────────────────
+sampling:
+  min_relevance_score: 4
+  evolution_ratio: 0.70
+  test_ratio: 0.30
+
+# ── Evaluation (future) ─────────────────────────────────────────────────────
+evaluation:
+  improvement_threshold_approve: 15.0
+  improvement_threshold_reject: -5.0
+  dimensions:
+    rule_compliance: 0.30
+    output_quality: 0.30
+    efficiency: 0.20
+    stability: 0.20

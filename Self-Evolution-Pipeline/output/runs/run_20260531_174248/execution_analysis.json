@@ -1,0 +1,70 @@
+{
+  "skill_name": "protocol-agent",
+  "total_sessions": 2,
+  "success_count": 1,
+  "retry_success_count": 1,
+  "failed_count": 0,
+  "success_rate": 1.0,
+  "dominant_patterns": [
+    {
+      "pattern": "协议记录数量必须限制在3条以内",
+      "frequency": 2,
+      "impact": "high",
+      "evidence": [
+        "f0b21ecb-371",
+        "5269b536-fce"
+      ]
+    }
+  ],
+  "failure_analysis": {
+    "root_causes": [
+      {
+        "cause": "协议记录数量超过规则上限3条",
+        "frequency": 1,
+        "affected_sessions": [
+          "f0b21ecb-371"
+        ],
+        "category": "rule_violation"
+      }
+    ],
+    "common_errors": [
+      "协议记录数量超限导致任务失败"
+    ]
+  },
+  "skill_gaps": [
+    {
+      "gap": "Skill缺乏自动筛选协议记录以符合数量上限的逻辑",
+      "evidence": "会话1中，协议记录数量为9条，超过上限3条，需要手动筛选",
+      "priority": "high"
+    }
+  ],
+  "evolution_suggestions": [
+    {
+      "type": "fix",
+      "direction": "在协议分析流程中添加前置验证步骤：自动检查协议记录数量，如果超过3条，则基于相关性筛选最高优先级的记录，确保输出符合规则上限",
+      "target_skills": [
+        "protocol-agent"
+      ],
+      "category": "workflow",
+      "evidence_sessions": [
+        "f0b21ecb-371"
+      ]
+    },
+    {
+      "type": "derived",
+      "direction": "增强协议记录筛选逻辑，使其能根据任务上下文自动评估相关性，并支持动态调整筛选策略，以泛化到不同协议分析场景",
+      "target_skills": [
+        "protocol-agent"
+      ],
+      "category": "workflow",
+      "evidence_sessions": [
+        "5269b536-fce"
+      ]
+    }
+  ],
+  "execution_efficiency": {
+    "avg_tokens": 808208,
+    "avg_duration_seconds": 256.4,
+    "bottleneck_tools": []
+  }
+}

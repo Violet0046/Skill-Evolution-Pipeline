@@ -1,0 +1,20 @@
+[project]
+name = "skill-evolution-pipeline"
+version = "0.1.0"
+description = "Skill Evolution Pipeline - intelligent skill evolution system"
+requires-python = ">=3.10"
+dependencies = [
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+llm = [
+    "anthropic>=0.30.0",
+    "openai>=1.0.0",
+]
+dev = [
+    "pytest>=7.0",
+]
+
+[project.scripts]
+skill-evolve = "skill_evolution.pipeline.runner:main"

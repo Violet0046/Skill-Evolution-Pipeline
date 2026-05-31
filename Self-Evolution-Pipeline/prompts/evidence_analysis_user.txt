@@ -1,0 +1,74 @@
+以下是 Skill「{skill_name}」的 {session_count} 个会话执行证据：
+
+{evidence_text}
+
+请基于以上证据集，输出以下 JSON 格式的 ExecutionAnalysis：
+
+```json
+{{
+  "skill_name": "{skill_name}",
+  "total_sessions": {session_count},
+  "success_count": <成功会话数>,
+  "retry_success_count": <重试成功会话数>,
+  "failed_count": <失败会话数>,
+  "success_rate": <成功率，0-1>,
+
+  "dominant_patterns": [
+    {{
+      "pattern": "<模式描述>",
+      "frequency": <出现次数>,
+      "impact": "high/medium/low",
+      "evidence": ["<session_id_1>", "<session_id_2>"]
+    }}
+  ],
+
+  "failure_analysis": {{
+    "root_causes": [
+      {{
+        "cause": "<根本原因描述>",
+        "frequency": <出现次数>,
+        "affected_sessions": ["<session_id>"],
+        "category": "tool_misuse/rule_violation/logic_error/missing_step"
+      }}
+    ],
+    "common_errors": ["<高频错误描述>"]
+  }},
+
+  "skill_gaps": [
+    {{
+      "gap": "<缺失或不足的规则/流程>",
+      "evidence": "<支撑证据>",
+      "priority": "high/medium/low"
+    }}
+  ],
+
+  "evolution_suggestions": [
+    {{
+      "type": "fix",
+      "direction": "<具体的修复方向，说明修什么、为什么修>",
+      "target_skills": ["{skill_name}"],
+      "category": "workflow",
+      "evidence_sessions": ["<支撑此建议的 session_id>"]
+    }},
+    {{
+      "type": "derived",
+      "direction": "<具体的增强方向，说明增强什么、预期效果>",
+      "target_skills": ["{skill_name}"],
+      "category": "workflow",
+      "evidence_sessions": ["<支撑此建议的 session_id>"]
+    }}
+  ],
+
+  "execution_efficiency": {{
+    "avg_tokens": <平均 token>,
+    "avg_duration_seconds": <平均耗时>,
+    "bottleneck_tools": ["<耗时最多的工具>"]
+  }}
+}}
+```
+
+注意：
+- evolution_suggestions 可以有 0 到 N 条，根据证据实际情况决定
+- 如果证据显示 Skill 运行良好无需改进，evolution_suggestions 为 []
+- 每条 suggestion 的 direction 必须足够具体，能直接指导 Skill 修改
+- category 可选值：tool_guide / workflow / reference

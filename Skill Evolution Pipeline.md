@@ -693,3 +693,248 @@ skill-evolution-pipeline/
 
 *文档版本: v1.0*
 *最后更新: 2026-05-29*
+
+
+
+N 个 JSONL 文件
+    │
+    ▼ 【代码】ProtoExtractor（新增）
+N 个 ProtoAnalysis（~500B/session）
+    │
+    ▼ 【代码】QualityFilter + Split（已有）
+进化集 + 测试集
+    │
+    ▼ 【代码】EvidenceBuilder（新增）
+把进化集格式化成一个文本块（参考 OpenSpace 的 _format_analysis_context）
+    │
+    ▼ 【LLM】EvidenceAnalyzer（新增，参考 OpenSpace 的 analyzer）
+一个 LLM 调用，看到全部证据 → 输出 ExecutionAnalysis
+（包含 failure_patterns, success_factors, evolution_suggestions）
+    │
+    ▼ 【LLM】SkillEvolver（后续阶段，参考 OpenSpace 的 evolver）
+基于 ExecutionAnalysis → 生成新版本 skill
+
+Step 1: ProtoExtractor（代码）
+
+输入: agent-a01f...jsonl (150KB)
+输出: ProtoAnalysis (~500B)
+
+@dataclass
+class ProtoAnalysis:
+    session_id: str
+    status: str                    # success / retry_success / failed
+    task_title: str                # "苹果终端BWP切换机制优化"
+    task_description: str          # 任务描述
+    tool_sequence: str             # "Read→Bash→Read→Bash→Write"
+    failure_reason: str            # "协议记录数量(9条)超过规则上限(3条)"
+    correction: str                # "筛选相关度最高的3条协议记录"
+    final_output: str              # 最后一条 assistant 消息的前 500 字符
+    error_tool_calls: list[str]    # 出错的工具调用摘要
+    token_usage: int               # 总 token 消耗
+    duration_seconds: float
+纯代码，正则提取，零 LLM 成本。
+
+Step 2: QualityFilter + Split（已有）
+过滤低质量 proto-analysis，拆分进化集/测试集。已有代码，不用改。
+
+Step 3: EvidenceBuilder（新增）
+把 N 个 ProtoAnalysis 格式化成一个文本块，参考 OpenSpace 的 _format_analysis_context()：
+
+
+# Skill Evolution Evidence
+
+## Current Skill
+{skill_content}
+
+## Execution Evidence ({N} sessions)
+
+### Session 1 (retry_success)
+Task: 苹果终端BWP切换机制优化
+Failure: 协议记录数量(9条)超过规则上限(3条)
+Correction: 筛选相关度最高的3条协议记录
+Tools: Read→Bash→Read→Bash→Read→Read→Read→Bash→Read→Write→...
+Output: | TS_38.213 | Bandwidth part operation | BWP-Id |...
+
+### Session 2 (success)
+Task: 苹果终端BWP切换机制优化
+Tools: Bash→Read→Read→Bash→Read→Bash→Bash→Bash→Read→...
+Output: | TS_38.331 | RRC reconfiguration | BWP-Configuration |...
+
+...
+纯代码，字符串拼接。
+
+Step 4: EvidenceAnalyzer（LLM，参考 OpenSpace）
+一个 LLM 调用，输入是 Step 3 的文本块，输出参考 OpenSpace 的 ExecutionAnalysis：
+
+
+{
+  "task_completed": true,
+  "execution_note": "10个session中，3个因协议记录数量超限失败，7个成功。核心问题是skill步骤2和5缺乏数量硬约束。",
+  "failure_patterns": [
+    "步骤2: 未约束协议册数量，导致输出超过3条",
+    "步骤5: 信令信元未按相关度筛选"
+  ],
+  "success_factors": [
+    "重试时明确给出'最多3条'约束后可通过"
+  ],
+  "evolution_suggestions": [
+    {
+      "type": "fix",
+      "direction": "在步骤2和步骤5中增加明确的数量硬约束：输出数量必须<=3，否则视为失败"
+    }
+  ],
+  "interesting_sessions": ["f0b21ecb-..."]
+}
+如果 LLM 觉得某个 session 需要深入看 → 用 read_file 读原始 JSONL。
+
+Execute() → [分析LLM] → ExecutionAnalysis（含 evolution_suggestions）
+                              │
+                              ▼
+                    [进化LLM] → 新 skill
+
+N 个 session → [代码] → N 个 ProtoAnalysis
+                            │
+                            ▼
+                    EvidenceBuilder → 文本块
+                            │
+                            ▼
+                    [分析LLM] → 综合 Analysis（看全貌、找模式）
+                            │
+                            ▼
+                    [进化LLM] → 新 skill
+
+
+                    OpenSpace 的流程：
+
+1 次执行 → 1 个 ExecutionAnalysis → N 个 suggestions → 串行处理
+suggestions 之间可能有关联（比如 "修复 X" 和 "增强 Y"），但 OpenSpace 不做去重，按顺序逐个 apply
+我们的优势：
+
+N 个 session → 1 个聚合 ExecutionAnalysis → M 个 suggestions → 串行处理
+因为看到了多个 session 的证据，同一个问题可能被多个 session 反复暴露，比如 session 1 失败原因是"协议数量超限"，session 2 也是 — EvidenceAnalyzer 可以把它们合并成一条 suggestion，天然去重
+所以我们的 suggestions 质量会更高：频次感知 + 跨 session 去重，这恰恰是多 session 聚合分析的核心价值。   
+
+
+
+
+
+
+
+在项目根目录 Self-Evolution-Pipeline/ 下执行：
+
+
+# 设置环境变量（你的 API 凭据）
+set ANTHROPIC_API_KEY=tp-cm02skhdu7z6yw1hr1cs3dj67hj02l9t55phymomh4be138z
+set ANTHROPIC_BASE_URL=https://token-plan-cn.xiaomimimo.com/anthropic
+
+# 跑完整流水线
+python -m "Skill Evolution Pipeline.src.pipeline.main" --stage all
+输出目录在 Skill Evolution Pipeline/output/runs/run_YYYYMMDD_HHMMSS/。
+
+7 个阶段 + 对应产物
+阶段	做什么	产物文件	怎么看
+1. Extract	JSONL → CanonicalSession	无独立文件，内存中	终端打印 session_id, status, tokens
+2. Filter	按 quality_score 过滤	无	终端打印 passed/discarded
+3. Split	70/30 拆分	evolution_evidence.json test_set.json run_meta.json	看 run_meta.json 的统计数字
+4. ProtoExtract	Session → ProtoAnalysis	无独立文件	终端打印 tool_sequence
+5. EvidenceBuild	N 个 ProtoAnalysis → 文本块	evidence_text.json	看 evidence_text 字段，约 1.5KB
+6. Analyze	LLM 分析证据集	execution_analysis.json	核心产物，看 evolution_suggestions
+7. Evolve	LLM 逐个处理 suggestions	evolution_results.json + evolved_skills/ 目录	看每个 suggestion 的 ok/error
+重点看什么
+execution_analysis.json — 最重要的中间产物：
+
+
+evolution_suggestions[0].type        → "fix" 或 "derived"
+evolution_suggestions[0].direction   → LLM 给出的具体改进方向
+failure_analysis.root_causes[0]     → 根本原因
+skill_gaps[0]                       → 技能缺口
+evolution_results.json — 进化结果：
+
+
+results[0].ok               → 是否成功 apply
+results[0].change_summary   → LLM 生成的变更摘要
+results[0].error            → 失败原因（当前是 "SKILL.md not found"）
+evolved_skills/ — 如果 apply 成功，这里会有新生成的 SKILL.md 文件。
+
+当前的预期行为
+进化阶段的 2 条 suggestion 会报错 SKILL.md not found，因为我们没有真实的协议分析 Skill 文件。这是正常的 — 流水线的代码逻辑是完整的，只是缺少输入的 Skill 内容。
+
+
+执行 python -m "Skill Evolution Pipeline.src.pipeline.main"流程
+============================================================
+Skill Evolution Pipeline
+============================================================
+Skill:       protocol-agent
+Project:     D:\VS\26project\Self-Evolution-Pipeline
+Output:      D:\VS\26project\Self-Evolution-Pipeline\Skill Evolution Pipeline\output\runs\run_20260531_174248
+Stage:       all
+============================================================
+  Loaded 272 index entries from sessions.jsonl
+[EXTRACT] Found 2 JSONL file(s)
+  Processing: agent-a01f608112c9c058a.jsonl
+    -> session_id=f0b21ecb-3710-4c5f-bef7-6cad3247aa27
+       status=retry_success, messages=77, tools=24, tokens=1065668
+       quality_score=60, retry=True
+  Processing: agent-aec40353c470e2cb8.jsonl
+    -> session_id=5269b536-fce3-4b7b-b44c-16e385b6d26a
+       status=success, messages=61, tools=20, tokens=550748
+       quality_score=39, retry=True
+
+[FILTER] Results:
+  Input: 2 sessions
+  Passed: 2
+    failed: 0
+    retry_success: 1
+    success: 1
+
+[SPLIT] Results:
+  Evolution set: 2 sessions
+    - f0b21ecb-371... (retry_success)
+    - 5269b536-fce... (success)
+  Test set: 0 sessions
+
+[PROTO] Extracted 2 ProtoAnalyses
+  - f0b21ecb-371: retry_success, tools=Skill→Read→Bash→Read→Bash→Read→Bash→Read
+  - 5269b536-fce: success, tools=Skill→Bash→Read→Bash→Read→Bash→Read→Bash
+
+[EVIDENCE] Built evidence text: 1585 chars
+
+[ANALYSIS] LLM analysis complete:
+ExecutionAnalysis: protocol-agent
+  Sessions: 2 (success=1, retry=1, failed=0)
+  Success rate: 100%
+  Patterns: 1
+  Root causes: 1
+  Skill gaps: 1
+  Evolution suggestions: 2
+    [fix] 在协议分析流程中添加前置验证步骤：自动检查协议记录数量，如果超过3条，则基于相关性筛选最高优先级的记录，确保输出符合规则上限
+    [derived] 增强协议记录筛选逻辑，使其能根据任务上下文自动评估相关性，并支持动态调整筛选策略，以泛化到不同协议分析场景
+
+[EVOLVE] Processing 2 suggestion(s)
+
+  Suggestion 1/2: [fix] 在协议分析流程中添加前置验证步骤：自动检查协议记录数量，如果超过3条，则基于相关性筛选最高优先级的记录，确保输出符合规则...
+    OK: Added automatic filtering of protocol records based on relevance when exceeding 3 entries, replacing the previous blocking validation.
+
+  Suggestion 2/2: [derived] 增强协议记录筛选逻辑，使其能根据任务上下文自动评估相关性，并支持动态调整筛选策略，以泛化到不同协议分析场景...
+    OK: 增强协议筛选逻辑，通过分析需求文档自动评估协议相关性并支持动态策略选择，以提升分析的准确性和泛化能力。
+
+[EVOLVE] Results: 2 ok, 0 failed
+  [OK] fix: Added automatic filtering of protocol records based on relevance when exceeding 3 entries, replacing the previous blocking validation.
+  [OK] derived: 增强协议筛选逻辑，通过分析需求文档自动评估协议相关性并支持动态策略选择，以提升分析的准确性和泛化能力。
+
+  Analysis output:
+    D:\VS\26project\Self-Evolution-Pipeline\Skill Evolution Pipeline\output\runs\run_20260531_174248\evidence_text.json
+    D:\VS\26project\Self-Evolution-Pipeline\Skill Evolution Pipeline\output\runs\run_20260531_174248\execution_analysis.json
+    D:\VS\26project\Self-Evolution-Pipeline\Skill Evolution Pipeline\output\runs\run_20260531_174248\evolution_results.json
+
+  Output files:
+    D:\VS\26project\Self-Evolution-Pipeline\Skill Evolution Pipeline\output\runs\run_20260531_174248\evolution_evidence.json
+    D:\VS\26project\Self-Evolution-Pipeline\Skill Evolution Pipeline\output\runs\run_20260531_174248\test_set.json
+    D:\VS\26project\Self-Evolution-Pipeline\Skill Evolution Pipeline\output\runs\run_20260531_174248\run_meta.json
+
+============================================================
+Pipeline complete.
+============================================================
+(base) PS D:\VS\26project\Self-Evolution-Pipeline> 
+
+

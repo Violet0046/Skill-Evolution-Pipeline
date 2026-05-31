@@ -1,0 +1,31 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "Bash(python -c \"import src; print\\('Package imports successfully'\\)\")",
+      "Bash(ls -la \"D:/VS/26project/OpenSpace-main/\")",
+      "Read(//d/VS/26project/OpenSpace-main/**)",
+      "Bash(find \"D:/VS/26project/OpenSpace-main\" -maxdepth 2 -type f -name \"*.py\" | sort)",
+      "Bash(find \"D:/VS/26project/OpenSpace-main\" -maxdepth 2 -type d | sort)",
+      "Bash(pip install *)",
+      "Bash(cp \"协议分析-agent/sessions.jsonl\" data/protocol-agent/)",
+      "Bash(python -m src.pipeline.main --project-root . --stage all)",
+      "Bash(python -c ' *)",
+      "Bash(rm -rf \"Skill Evolution Pipeline/output/runs/run_\"*)",
+      "Bash(python -m \"Skill Evolution Pipeline.src.pipeline.main\" --stage all)",
+      "Bash(rm -rf \"Skill Evolution Pipeline/output/runs/run_\"* \"Skill Evolution Pipeline/output/runs/latest\")",
+      "Bash(python -m \"Skill Evolution Pipeline.src.pipeline.main\")",
+      "Bash(python -m \"Skill Evolution Pipeline.src.pipeline.main\" --stage sample)",
+      "Bash(pip show *)",
+      "Bash(ANTHROPIC_API_KEY=\"tp-cm02skhdu7z6yw1hr1cs3dj67hj02l9t55phymomh4be138z\" ANTHROPIC_BASE_URL=\"https://token-plan-cn.xiaomimimo.com/anthropic\" python -m \"Skill Evolution Pipeline.src.pipeline.main\" --stage all)",
+      "Bash(mkdir -p \"d:/VS/26project/Self-Evolution-Pipeline/协议分析-agent/.claude/skills/协议分析-agent\")",
+      "Bash(python -m skill_evolution.pipeline.runner --stage extract)",
+      "Bash(python -m skill_evolution.pipeline.runner)",
+      "Bash(python -c \"import sys,json; d=json.loads\\(sys.stdin.readline\\(\\)\\); print\\(d.get\\('sessionId',''\\), d.get\\('agentId',''\\)\\)\")",
+      "Bash(python -c \"import sys,json; [print\\(json.loads\\(l\\)['session_path'][:50]\\) for l in sys.stdin]\")"
+    ],
+    "additionalDirectories": [
+      "d:\\VS\\26project\\Self-Evolution-Pipeline\\协议分析-agent\\.claude\\skills"
+    ]
+  }
+}
