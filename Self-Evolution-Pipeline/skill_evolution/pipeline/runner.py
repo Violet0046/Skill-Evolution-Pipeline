@@ -255,27 +255,15 @@ def run_pipeline(config: PipelineConfig, stage: str = "all") -> None:
     groups = run_filtering(config, sessions)
     evolution_set, test_set = run_split(config, groups)
 
-    # source_files mapping: session_id -> original JSONL filename
-    source_files = {}
-    for s in evolution_set + test_set:
-        file_path = s.metadata.get("file_path", "")
-        if file_path:
-            source_files[s.session_id] = Path(file_path).name
+    # Build session info for run_meta
+    def _session_entry(s):
+        return {
+            "session_id": s.session_id,
+            "source_file": Path(s.metadata.get("file_path", "")).name,
+            "status": s.execution.status.value,
+            "quality_score": s.feedback.quality_score,
+        }
 
-    save_json(
-        {
-            "summaries": [s.summary() for s in evolution_set],
-            "source_files": source_files,
-        },
-        output_dir / "evolution_evidence.json",
-    )
-    save_json(
-        {
-            "summaries": [s.summary() for s in test_set],
-            "source_files": source_files,
-        },
-        output_dir / "test_set.json",
-    )
     save_json(
         {
             "run_id": run_id,
@@ -285,6 +273,8 @@ def run_pipeline(config: PipelineConfig, stage: str = "all") -> None:
             "total_filtered": len(evolution_set) + len(test_set),
             "evolution_count": len(evolution_set),
             "test_count": len(test_set),
+            "evolution_set": [_session_entry(s) for s in evolution_set],
+            "test_set": [_session_entry(s) for s in test_set],
             "config": {
                 "min_relevance_score": config.sampling.min_relevance_score,
                 "evolution_ratio": config.sampling.evolution_ratio,
@@ -300,10 +290,10 @@ def run_pipeline(config: PipelineConfig, stage: str = "all") -> None:
         analyses = run_proto_extraction(evolution_set)
         evidence_text = run_evidence_build(analyses, config.skill_name)
 
-        save_json(
-            {"evidence_text": evidence_text, "session_count": len(analyses)},
-            output_dir / "evidence_text.json",
-        )
+        # Save evidence as readable markdown
+        md_path = output_dir / "evidence_text.md"
+        md_path.parent.mkdir(parents=True, exist_ok=True)
+        md_path.write_text(evidence_text, encoding="utf-8")
 
         analysis = run_analysis(
             config, evidence_text, config.skill_name, len(analyses), prompt_loader,
@@ -338,13 +328,11 @@ def run_pipeline(config: PipelineConfig, stage: str = "all") -> None:
             )
 
         print(f"\n  Analysis output:")
-        print(f"    {output_dir / 'evidence_text.json'}")
+        print(f"    {output_dir / 'evidence_text.md'}")
         print(f"    {output_dir / 'execution_analysis.json'}")
         print(f"    {output_dir / 'evolution_results.json'}")
 
     print(f"\n  Output files:")
-    print(f"    {output_dir / 'evolution_evidence.json'}")
-    print(f"    {output_dir / 'test_set.json'}")
     print(f"    {output_dir / 'run_meta.json'}")
 
     print(f"\n{'=' * 60}")
