@@ -1,0 +1,29 @@
+# Environment & secrets
+.env
+*.env.local
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.egg
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Runtime output
+output/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Lock files
+*.lock
+.index.lock
