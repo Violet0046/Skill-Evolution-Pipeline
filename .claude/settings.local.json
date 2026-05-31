@@ -22,7 +22,8 @@
       "Bash(python -m skill_evolution.pipeline.runner --stage extract)",
       "Bash(python -m skill_evolution.pipeline.runner)",
       "Bash(python -c \"import sys,json; d=json.loads\\(sys.stdin.readline\\(\\)\\); print\\(d.get\\('sessionId',''\\), d.get\\('agentId',''\\)\\)\")",
-      "Bash(python -c \"import sys,json; [print\\(json.loads\\(l\\)['session_path'][:50]\\) for l in sys.stdin]\")"
+      "Bash(python -c \"import sys,json; [print\\(json.loads\\(l\\)['session_path'][:50]\\) for l in sys.stdin]\")",
+      "Bash(python -m pytest tests/ -v --tb=short)"
     ],
     "additionalDirectories": [
       "d:\\VS\\26project\\Self-Evolution-Pipeline\\协议分析-agent\\.claude\\skills"

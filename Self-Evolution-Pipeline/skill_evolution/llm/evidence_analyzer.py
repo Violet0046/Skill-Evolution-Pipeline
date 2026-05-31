@@ -15,6 +15,10 @@ from skill_evolution.llm.base import LLMWithTools
 from skill_evolution.llm.tools import SESSION_TOOLS, SessionToolRegistry
 from skill_evolution.models.evolution import EvolutionSuggestion, EvolutionType
 from skill_evolution.models.session import CanonicalSession
+from skill_evolution.exceptions import LLMError, ErrorCode
+from skill_evolution.utils.logging import Logger
+
+logger = Logger.get_logger(__name__)
 
 
 class ExecutionAnalysis:
@@ -133,7 +137,8 @@ class EvidenceAnalyzer:
             except json.JSONDecodeError:
                 pass
 
-        raise ValueError(
-            f"Failed to parse ExecutionAnalysis JSON from LLM response.\n"
-            f"Response (first 500 chars): {response_text[:500]}"
+        raise LLMError(
+            f"Failed to parse ExecutionAnalysis JSON from LLM response.",
+            code=ErrorCode.LLM_RESPONSE_PARSE,
+            response_preview=response_text[:500],
         )

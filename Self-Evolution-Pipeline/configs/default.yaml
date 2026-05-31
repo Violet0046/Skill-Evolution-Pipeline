@@ -3,6 +3,14 @@
 
 skill_name: "protocol-agent"
 
+# Multi-skill parallel mode (optional):
+# skill_names:
+#   - "protocol-agent"
+#   - "code-review-agent"
+#   - "doc-generator-agent"
+# max_concurrent_skills: 3
+# max_concurrent_suggestions: 3
+
 # ── Paths ────────────────────────────────────────────────────────────────────
 # All paths are relative to project_root unless they start with / or drive letter.
 # project_root: empty string = auto-detect from CLI --project-root or parent of pipeline dir.

@@ -14,6 +14,9 @@ from skill_evolution.models.session import (
     CanonicalSession, TaskInput, ExecutionTrace, ExecutionStatus,
     Message, MessageRole, ToolCall, TokenUsage, Feedback,
 )
+from skill_evolution.utils.logging import Logger
+
+logger = Logger.get_logger(__name__)
 
 
 class SessionExtractor:

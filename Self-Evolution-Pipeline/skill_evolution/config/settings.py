@@ -1,77 +1,133 @@
-"""Configuration management for the Skill Evolution Pipeline."""
+"""Configuration management for the Skill Evolution Pipeline.
+
+Adapted from OpenSpace config/grounding.py pattern:
+- Pydantic v2 BaseModel hierarchy with Field validators
+- Thread-safe singleton loader with deep merge
+- field_validator for custom validation
+- ConfigMixin for safe attribute access
+"""
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+import threading
 from pathlib import Path
+from typing import Any, Dict, List, Optional
+
 import yaml
+from pydantic import BaseModel, Field, field_validator
+
+from skill_evolution.config.constants import (
+    LOG_LEVELS,
+    DEFAULT_MODEL,
+    DEFAULT_MAX_TOKENS,
+    DEFAULT_TEMPERATURE,
+    DEFAULT_MAX_RETRIES,
+    DEFAULT_TIMEOUT,
+    DEFAULT_EVOLUTION_RATIO,
+    DEFAULT_TEST_RATIO,
+    DEFAULT_MIN_RELEVANCE_SCORE,
+)
 
 
-@dataclass
-class LLMConfig:
-    provider: str = "anthropic"  # anthropic, openai
-    model: str = "claude-sonnet-4-20250514"
-    max_tokens: int = 4096
-    temperature: float = 0.0
-    max_retries: int = 3
-    retry_delay: float = 1.0
+class ConfigMixin:
+    """Mixin to add utility methods for config access."""
+
+    def get_value(self, key: str, default: Any = None) -> Any:
+        """Safely get config value, works with both dict and Pydantic models."""
+        if isinstance(self, dict):
+            return self.get(key, default)
+        return getattr(self, key, default)
 
 
-@dataclass
-class ExtractionConfig:
+class LLMConfig(BaseModel, ConfigMixin):
+    """LLM provider configuration."""
+    provider: str = Field("anthropic", description="LLM provider: anthropic, openai")
+    model: str = Field(DEFAULT_MODEL, description="Model identifier")
+    max_tokens: int = Field(DEFAULT_MAX_TOKENS, ge=256, le=128000, description="Max output tokens")
+    temperature: float = Field(DEFAULT_TEMPERATURE, ge=0.0, le=2.0, description="Sampling temperature")
+    max_retries: int = Field(DEFAULT_MAX_RETRIES, ge=0, le=10, description="Max retry attempts")
+    retry_delay: float = Field(1.0, ge=0.1, le=60.0, description="Base retry delay in seconds")
+    timeout: float = Field(DEFAULT_TIMEOUT, ge=1.0, le=600.0, description="Per-request timeout in seconds")
+
+    @field_validator("provider")
+    @classmethod
+    def validate_provider(cls, v: str) -> str:
+        valid = {"anthropic", "openai"}
+        if v.lower() not in valid:
+            raise ValueError(f"Provider must be one of {valid}, got: {v}")
+        return v.lower()
+
+
+class ExtractionConfig(BaseModel, ConfigMixin):
     """Configuration for the extraction layer."""
-    max_content_length: int = 500  # max chars for content previews
-    include_tool_results: bool = True
-    include_system_messages: bool = False
+    max_content_length: int = Field(500, ge=50, le=5000, description="Max chars for content previews")
+    include_tool_results: bool = Field(True, description="Include tool results in extraction")
+    include_system_messages: bool = Field(False, description="Include system messages")
 
 
-@dataclass
-class SamplingConfig:
+class SamplingConfig(BaseModel, ConfigMixin):
     """Configuration for quality filtering and dataset split."""
-    min_relevance_score: int = 4
+    min_relevance_score: int = Field(DEFAULT_MIN_RELEVANCE_SCORE, ge=0, le=10, description="Minimum relevance score to include")
+    evolution_ratio: float = Field(DEFAULT_EVOLUTION_RATIO, ge=0.1, le=0.95, description="Evolution set ratio")
+    test_ratio: float = Field(DEFAULT_TEST_RATIO, ge=0.05, le=0.9, description="Test set ratio")
 
-    # evolution/test split ratio
-    evolution_ratio: float = 0.70
-    test_ratio: float = 0.30
-
-
-@dataclass
-class EvaluationConfig:
-    """Configuration for evaluation."""
-    improvement_threshold_approve: float = 15.0  # >= 15% -> APPROVE
-    improvement_threshold_reject: float = -5.0   # < -5% -> REJECT
-    # between -5% and 15% -> NEED_REVIEW
-
-    dimensions: dict = field(default_factory=lambda: {
-        "rule_compliance": 0.30,
-        "output_quality": 0.30,
-        "efficiency": 0.20,
-        "stability": 0.20,
-    })
+    @field_validator("test_ratio")
+    @classmethod
+    def validate_ratios(cls, v: float, info: Any) -> float:
+        evolution = info.data.get("evolution_ratio", DEFAULT_EVOLUTION_RATIO)
+        if abs(evolution + v - 1.0) > 0.01:
+            raise ValueError(f"evolution_ratio ({evolution}) + test_ratio ({v}) must sum to 1.0")
+        return v
 
 
-@dataclass
-class PathConfig:
+class EvaluationConfig(BaseModel, ConfigMixin):
+    """Configuration for evaluation thresholds."""
+    improvement_threshold_approve: float = Field(15.0, ge=0.0, description=">= this % -> APPROVE")
+    improvement_threshold_reject: float = Field(-5.0, le=0.0, description="< this % -> REJECT")
+    dimensions: Dict[str, float] = Field(
+        default_factory=lambda: {
+            "rule_compliance": 0.30,
+            "output_quality": 0.30,
+            "efficiency": 0.20,
+            "stability": 0.20,
+        },
+        description="Evaluation dimension weights (must sum to 1.0)",
+    )
+
+    @field_validator("dimensions")
+    @classmethod
+    def validate_dimensions(cls, v: Dict[str, float]) -> Dict[str, float]:
+        total = sum(v.values())
+        if abs(total - 1.0) > 0.01:
+            raise ValueError(f"Dimension weights must sum to 1.0, got {total:.2f}")
+        return v
+
+
+class PathConfig(BaseModel, ConfigMixin):
     """Path configuration — all paths are relative to project_root unless absolute."""
-    project_root: str = ""
+    project_root: str = Field("", description="Project root directory")
 
     # Input paths
-    session_glob: str = "agent-*.jsonl"
-    session_index: str = "{folder_name}/sessions.jsonl"
-    skill_search_paths: list[str] = field(default_factory=lambda: [
-        "{folder_name}/SKILL.md",
-        "{folder_name}/.claude/skills/{folder_name}/SKILL.md",
-        "{folder_name}/.claude/skills/{skill_name}/SKILL.md",
-    ])
-    skill_folder_map: dict = field(default_factory=lambda: {
-        "protocol-agent": "协议分析-agent",
-    })
+    session_glob: str = Field("agent-*.jsonl", description="Glob pattern for session JSONL files")
+    session_index: str = Field("{folder_name}/sessions.jsonl", description="Session index path template")
+    skill_search_paths: List[str] = Field(
+        default_factory=lambda: [
+            "{folder_name}/SKILL.md",
+            "{folder_name}/.claude/skills/{folder_name}/SKILL.md",
+            "{folder_name}/.claude/skills/{skill_name}/SKILL.md",
+        ],
+        description="Skill file search paths (tried in order)",
+    )
+    skill_folder_map: Dict[str, str] = Field(
+        default_factory=lambda: {"protocol-agent": "协议分析-agent"},
+        description="Map skill_name -> on-disk folder name",
+    )
 
     # Output paths
-    output_dir: str = "output/runs"
-    staging_dir: str = "output/staging"
-    prompts_dir: str = "prompts"
+    output_dir: str = Field("output/runs", description="Run output directory")
+    staging_dir: str = Field("output/staging", description="Staging directory for evolved skills")
+    prompts_dir: str = Field("prompts", description="Prompt templates directory")
 
-    def _resolve_path(self, path_str: str, base: Path | None = None) -> Path:
+    def _resolve_path(self, path_str: str, base: Optional[Path] = None) -> Path:
         """Resolve a path string: absolute if starts with / or drive letter, else relative to base."""
         p = Path(path_str)
         if p.is_absolute():
@@ -81,23 +137,22 @@ class PathConfig:
 
     @staticmethod
     def _pipeline_dir() -> Path:
-        """Return the pipeline directory (skill-evolution/)."""
+        """Return the pipeline directory (Self-Evolution-Pipeline/)."""
         return Path(__file__).resolve().parent.parent.parent
 
     def get_project_root(self) -> Path:
-        """Get the project root as a Path. Must be set before use."""
+        """Get the project root as a Path."""
         if not self.project_root:
             raise ValueError("project_root is not set. Provide via config or --project-root flag.")
         return Path(self.project_root)
 
     def get_folder_name(self, skill_name: str) -> str:
-        """Map skill_name to on-disk folder name via skill_folder_map."""
+        """Map skill_name to on-disk folder name."""
         return self.skill_folder_map.get(skill_name, skill_name)
 
     def resolve_session_files(self) -> list[Path]:
         """Find all session JSONL files matching session_glob under project_root."""
-        root = self.get_project_root()
-        return sorted(root.glob(self.session_glob))
+        return sorted(self.get_project_root().glob(self.session_glob))
 
     def resolve_session_index(self, skill_name: str) -> Path:
         """Resolve the sessions.jsonl index path for a given skill."""
@@ -105,7 +160,7 @@ class PathConfig:
         raw = self.session_index.format(skill_name=skill_name, folder_name=folder_name)
         return self._resolve_path(raw)
 
-    def resolve_skill_dir(self, skill_name: str) -> Path | None:
+    def resolve_skill_dir(self, skill_name: str) -> Optional[Path]:
         """Find the directory containing SKILL.md for the given skill."""
         root = self.get_project_root()
         folder_name = self.get_folder_name(skill_name)
@@ -117,7 +172,7 @@ class PathConfig:
         return None
 
     def resolve_skill_content(self, skill_name: str) -> str:
-        """Load SKILL.md content for the given skill. Returns placeholder if not found."""
+        """Load SKILL.md content for the given skill."""
         skill_dir = self.resolve_skill_dir(skill_name)
         if skill_dir:
             skill_file = skill_dir / "SKILL.md"
@@ -126,73 +181,105 @@ class PathConfig:
         return f"---\nname: {skill_name}\ndescription: Placeholder\n---\n\n# {skill_name}\n\nSkill content not found."
 
     def resolve_output_dir(self, run_id: str) -> Path:
-        """Resolve the output directory for a specific run (relative to pipeline dir)."""
+        """Resolve the output directory for a specific run."""
         return self._resolve_path(self.output_dir, base=self._pipeline_dir()) / run_id
 
     def resolve_staging_dir(self, skill_name: str) -> Path:
-        """Resolve the staging directory for evolved skills (relative to pipeline dir)."""
+        """Resolve the staging directory for evolved skills."""
         return self._resolve_path(self.staging_dir, base=self._pipeline_dir()) / skill_name
 
     def resolve_prompts_dir(self) -> Path:
-        """Resolve the prompts directory (relative to pipeline dir)."""
+        """Resolve the prompts directory."""
         return self._resolve_path(self.prompts_dir, base=self._pipeline_dir())
 
 
-@dataclass
-class PipelineConfig:
-    """Top-level pipeline configuration."""
-    skill_name: str = "protocol-agent"
-    llm: LLMConfig = field(default_factory=LLMConfig)
-    extraction: ExtractionConfig = field(default_factory=ExtractionConfig)
-    sampling: SamplingConfig = field(default_factory=SamplingConfig)
-    evaluation: EvaluationConfig = field(default_factory=EvaluationConfig)
-    paths: PathConfig = field(default_factory=PathConfig)
+class PipelineConfig(BaseModel, ConfigMixin):
+    """Top-level pipeline configuration — Pydantic v2 BaseModel."""
+    skill_name: str = Field("protocol-agent", description="Skill name to evolve (single mode)")
+    skill_names: List[str] = Field(default_factory=list, description="Skill names to evolve (multi-skill mode)")
+    max_concurrent_skills: int = Field(3, ge=1, le=10, description="Max concurrent skill evolutions")
+    max_concurrent_suggestions: int = Field(3, ge=1, le=5, description="Max concurrent evolution suggestions per skill")
+    llm: LLMConfig = Field(default_factory=LLMConfig)
+    extraction: ExtractionConfig = Field(default_factory=ExtractionConfig)
+    sampling: SamplingConfig = Field(default_factory=SamplingConfig)
+    evaluation: EvaluationConfig = Field(default_factory=EvaluationConfig)
+    paths: PathConfig = Field(default_factory=PathConfig)
+
+    def get_skill_names(self) -> List[str]:
+        """Return the list of skills to process. Falls back to [skill_name]."""
+        if self.skill_names:
+            return self.skill_names
+        return [self.skill_name]
 
     @classmethod
     def from_yaml(cls, path: str) -> PipelineConfig:
+        """Load config from YAML file with deep merge."""
         with open(path, "r", encoding="utf-8") as f:
             data = yaml.safe_load(f) or {}
-
-        config = cls()
-        if "skill_name" in data:
-            config.skill_name = data["skill_name"]
-
-        if "llm" in data:
-            for k, v in data["llm"].items():
-                if hasattr(config.llm, k):
-                    setattr(config.llm, k, v)
-
-        if "extraction" in data:
-            for k, v in data["extraction"].items():
-                if hasattr(config.extraction, k):
-                    setattr(config.extraction, k, v)
-
-        if "sampling" in data:
-            for k, v in data["sampling"].items():
-                if hasattr(config.sampling, k):
-                    setattr(config.sampling, k, v)
-
-        if "evaluation" in data:
-            for k, v in data["evaluation"].items():
-                if hasattr(config.evaluation, k):
-                    setattr(config.evaluation, k, v)
-
-        if "paths" in data:
-            for k, v in data["paths"].items():
-                if hasattr(config.paths, k):
-                    setattr(config.paths, k, v)
-
-        return config
+        return cls.model_validate(data)
 
     def to_yaml(self, path: str) -> None:
-        import dataclasses
-        data = {
-            "skill_name": self.skill_name,
-            "llm": dataclasses.asdict(self.llm),
-            "extraction": dataclasses.asdict(self.extraction),
-            "sampling": dataclasses.asdict(self.sampling),
-            "evaluation": dataclasses.asdict(self.evaluation),
-            "paths": dataclasses.asdict(self.paths),
-        }
+        """Save config to YAML file."""
+        data = self.model_dump()
         with open(path, "w", encoding="utf-8") as f:
             yaml.dump(data, f, default_flow_style=False, allow_unicode=True)
+
+    def model_dump_yaml(self) -> Dict[str, Any]:
+        """Export as dict suitable for YAML serialization."""
+        return self.model_dump()
+
+
+# ── Thread-safe singleton config loader (from OpenSpace pattern) ─────────────
+
+_config: Optional[PipelineConfig] = None
+_config_lock = threading.RLock()
+
+
+def _deep_merge_dict(base: dict, update: dict) -> dict:
+    """Deep merge two dictionaries, update's values override base's values."""
+    result = base.copy()
+    for key, value in update.items():
+        if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+            result[key] = _deep_merge_dict(result[key], value)
+        else:
+            result[key] = value
+    return result
+
+
+def load_config(config_path: Optional[str] = None) -> PipelineConfig:
+    """Load configuration from YAML file.
+
+    Thread-safe singleton: subsequent calls return cached config unless reset.
+    """
+    global _config
+    with _config_lock:
+        if config_path:
+            path = Path(config_path)
+        else:
+            path = PathConfig._pipeline_dir() / "configs" / "default.yaml"
+
+        if path.exists():
+            with open(path, "r", encoding="utf-8") as f:
+                raw_data = yaml.safe_load(f) or {}
+            _config = PipelineConfig.model_validate(raw_data)
+        else:
+            _config = PipelineConfig()
+
+    return _config
+
+
+def get_config() -> PipelineConfig:
+    """Get global config instance. Loads defaults if not yet loaded."""
+    global _config
+    if _config is None:
+        with _config_lock:
+            if _config is None:
+                load_config()
+    return _config
+
+
+def reset_config() -> None:
+    """Reset config singleton (for testing)."""
+    global _config
+    with _config_lock:
+        _config = None

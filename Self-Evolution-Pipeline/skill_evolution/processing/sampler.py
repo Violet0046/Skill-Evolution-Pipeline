@@ -10,6 +10,9 @@ from dataclasses import dataclass
 
 from skill_evolution.models.session import CanonicalSession
 from skill_evolution.config.settings import SamplingConfig
+from skill_evolution.utils.logging import Logger
+
+logger = Logger.get_logger(__name__)
 
 
 @dataclass

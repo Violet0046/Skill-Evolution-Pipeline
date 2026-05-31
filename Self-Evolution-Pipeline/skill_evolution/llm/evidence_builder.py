@@ -6,6 +6,9 @@ One ProtoAnalysis → ~500B, so N=20 → ~10KB text block (well within context w
 from __future__ import annotations
 
 from skill_evolution.models.proto_analysis import ProtoAnalysis
+from skill_evolution.utils.logging import Logger
+
+logger = Logger.get_logger(__name__)
 
 
 class EvidenceBuilder:

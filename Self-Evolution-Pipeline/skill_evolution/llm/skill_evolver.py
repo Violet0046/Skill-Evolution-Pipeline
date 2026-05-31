@@ -1,11 +1,16 @@
-"""SkillEvolver: processes evolution_suggestions serially to produce new skill versions.
+"""SkillEvolver: processes evolution_suggestions serially or in parallel.
 
 Uses LLMWithTools for multi-turn tool-use conversations. The LLM can call
 read_session_summary, read_session_messages, read_session_tool_detail to
 examine the evidence sessions before producing edits.
+
+Supports two modes:
+- evolve(): serial processing (default, safe for FIX that modifies in-place)
+- evolve_parallel(): concurrent processing via asyncio.gather (for DERIVED suggestions)
 """
 from __future__ import annotations
 
+import asyncio
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -19,12 +24,15 @@ from skill_evolution.llm.tools import SESSION_TOOLS, SessionToolRegistry
 from skill_evolution.llm.evidence_analyzer import ExecutionAnalysis
 from skill_evolution.models.evolution import EvolutionSuggestion, EvolutionType
 from skill_evolution.models.session import CanonicalSession
+from skill_evolution.utils.logging import Logger
 from skill_evolution.evolution.patch import (
     fix_skill, derive_skill, create_skill,
     extract_change_summary, strip_markdown_fences,
     validate_skill_dir, collect_skill_snapshot, truncate,
     SkillEditResult, PatchType,
 )
+
+logger = Logger.get_logger(__name__)
 
 
 @dataclass
@@ -80,14 +88,14 @@ class SkillEvolver:
         run_result = EvolutionRunResult(analysis=analysis)
 
         if not analysis.evolution_suggestions:
-            print("  [EVOLVE] No evolution suggestions to process")
+            logger.info("No evolution suggestions to process")
             return run_result
 
-        print(f"\n[EVOLVE] Processing {len(analysis.evolution_suggestions)} suggestion(s)")
+        logger.info(f"Processing {len(analysis.evolution_suggestions)} suggestion(s)")
 
         for i, suggestion in enumerate(analysis.evolution_suggestions):
-            print(f"\n  Suggestion {i+1}/{len(analysis.evolution_suggestions)}: "
-                  f"[{suggestion.evolution_type.value}] {suggestion.direction[:60]}...")
+            logger.info(f"Suggestion {i+1}/{len(analysis.evolution_suggestions)}: "
+                        f"[{suggestion.evolution_type.value}] {suggestion.direction[:60]}...")
 
             result = self._process_suggestion(
                 suggestion, skill_content, skill_dir, output_dir,
@@ -95,9 +103,9 @@ class SkillEvolver:
             run_result.results.append(result)
 
             if result.ok:
-                print(f"    OK: {result.change_summary}")
+                logger.info(f"  OK: {result.change_summary}")
             else:
-                print(f"    FAILED: {result.error}")
+                logger.warning(f"  FAILED: {result.error}")
 
         return run_result
 
@@ -308,3 +316,72 @@ class SkillEvolver:
             return derive_skill(skill_dir, target_dir, content)
         else:
             return create_skill(target_dir, content)
+
+    async def evolve_parallel(
+        self,
+        analysis: ExecutionAnalysis,
+        skill_content: str,
+        skill_dir: Optional[Path] = None,
+        output_dir: Optional[Path] = None,
+        max_concurrent: int = 3,
+    ) -> EvolutionRunResult:
+        """Process evolution_suggestions concurrently via asyncio.gather.
+
+        FIX suggestions are serialized (they modify in-place).
+        DERIVED/CAPTURED suggestions are processed concurrently.
+        """
+        run_result = EvolutionRunResult(analysis=analysis)
+
+        if not analysis.evolution_suggestions:
+            logger.info("No evolution suggestions to process")
+            return run_result
+
+        suggestions = analysis.evolution_suggestions
+
+        # Separate FIX (serial) from DERIVED/CAPTURED (parallel)
+        fix_suggestions = [s for s in suggestions if s.evolution_type == EvolutionType.FIX]
+        parallel_suggestions = [s for s in suggestions if s.evolution_type != EvolutionType.FIX]
+
+        logger.info(
+            f"Processing {len(suggestions)} suggestions: "
+            f"{len(fix_suggestions)} FIX (serial), {len(parallel_suggestions)} parallel"
+        )
+
+        # Process FIX suggestions serially (they modify in-place)
+        for suggestion in fix_suggestions:
+            logger.info(f"[FIX] {suggestion.direction[:60]}...")
+            result = self._process_suggestion(suggestion, skill_content, skill_dir, output_dir)
+            run_result.results.append(result)
+            if result.ok:
+                logger.info(f"  OK: {result.change_summary}")
+            else:
+                logger.warning(f"  FAILED: {result.error}")
+
+        # Process DERIVED/CAPTURED suggestions concurrently
+        if parallel_suggestions:
+            sem = asyncio.Semaphore(max_concurrent)
+
+            async def _process_one(s: EvolutionSuggestion) -> EvolutionResult:
+                async with sem:
+                    # Run in executor to avoid blocking the event loop
+                    loop = asyncio.get_event_loop()
+                    return await loop.run_in_executor(
+                        None, self._process_suggestion, s, skill_content, skill_dir, output_dir,
+                    )
+
+            tasks = [_process_one(s) for s in parallel_suggestions]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+
+            for s, r in zip(parallel_suggestions, results):
+                if isinstance(r, Exception):
+                    err_result = EvolutionResult(suggestion=s, error=str(r))
+                    run_result.results.append(err_result)
+                    logger.warning(f"  FAILED: {r}")
+                else:
+                    run_result.results.append(r)
+                    if r.ok:
+                        logger.info(f"  OK: {r.change_summary}")
+                    else:
+                        logger.warning(f"  FAILED: {r.error}")
+
+        return run_result
