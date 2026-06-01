@@ -29,8 +29,8 @@ from skill_evolution.config.constants import (
     DEFAULT_MIN_RELEVANCE_SCORE,
 )
 
-# Load .env file from pipeline directory
-_env_path = Path(__file__).parent.parent / ".env"
+# Load .env file from pipeline directory (Self-Evolution-Pipeline/)
+_env_path = Path(__file__).resolve().parent.parent.parent / ".env"
 if _env_path.exists():
     load_dotenv(_env_path)
 
@@ -46,16 +46,35 @@ class ConfigMixin:
 
 
 class LLMConfig(BaseModel, ConfigMixin):
-    """LLM provider configuration."""
+    """LLM provider configuration.
+
+    Provider-specific config is read from corresponding env vars:
+    - OpenAI/MiniMax: OPENAI_API_KEY, OPENAI_API_BASE, OPENAI_MODEL
+    - Anthropic: ANTHROPIC_API_KEY, ANTHROPIC_API_BASE, ANTHROPIC_MODEL
+    """
     provider: str = Field(os.getenv("LLM_PROVIDER", "openai"), description="LLM provider: anthropic, openai")
-    model: str = Field(os.getenv("OPENAI_MODEL", os.getenv("ANTHROPIC_MODEL", DEFAULT_MODEL)), description="Model identifier")
+    model: str = Field(default="", description="Model identifier (set dynamically based on provider)")
     max_tokens: int = Field(DEFAULT_MAX_TOKENS, ge=256, le=128000, description="Max output tokens")
     temperature: float = Field(DEFAULT_TEMPERATURE, ge=0.0, le=2.0, description="Sampling temperature")
     max_retries: int = Field(DEFAULT_MAX_RETRIES, ge=0, le=10, description="Max retry attempts")
     retry_delay: float = Field(1.0, ge=0.1, le=60.0, description="Base retry delay in seconds")
     timeout: float = Field(DEFAULT_TIMEOUT, ge=1.0, le=600.0, description="Per-request timeout in seconds")
-    api_base: Optional[str] = Field(os.getenv("OPENAI_API_BASE", None), description="API base URL for OpenAI-compatible providers")
-    api_key: Optional[str] = Field(os.getenv("OPENAI_API_KEY", os.getenv("ANTHROPIC_API_KEY", None)), description="API key for LLM provider")
+    api_base: Optional[str] = Field(default="", description="API base URL (set dynamically based on provider)")
+    api_key: Optional[str] = Field(default="", description="API key (set dynamically based on provider)")
+
+    def __init__(self, **data):
+        """Initialize with provider-specific env vars."""
+        super().__init__(**data)
+        # Override with provider-specific env vars
+        if self.provider == "anthropic":
+            self.api_key = os.getenv("ANTHROPIC_API_KEY", self.api_key)
+            self.api_base = os.getenv("ANTHROPIC_API_BASE", "") or None
+            self.model = os.getenv("ANTHROPIC_MODEL", self.model or DEFAULT_MODEL)
+        else:
+            # Default to openai-compatible
+            self.api_key = os.getenv("OPENAI_API_KEY", self.api_key)
+            self.api_base = os.getenv("OPENAI_API_BASE", "") or None
+            self.model = os.getenv("OPENAI_MODEL", self.model or DEFAULT_MODEL)
 
     @field_validator("provider")
     @classmethod
@@ -259,6 +278,12 @@ def load_config(config_path: Optional[str] = None) -> PipelineConfig:
     """Load configuration from YAML file.
 
     Thread-safe singleton: subsequent calls return cached config unless reset.
+
+    Environment variables take precedence over YAML config for sensitive values:
+    - OPENAI_API_KEY / ANTHROPIC_API_KEY
+    - OPENAI_API_BASE
+    - OPENAI_MODEL / ANTHROPIC_MODEL
+    - LLM_PROVIDER
     """
     global _config
     with _config_lock:
@@ -270,6 +295,11 @@ def load_config(config_path: Optional[str] = None) -> PipelineConfig:
         if path.exists():
             with open(path, "r", encoding="utf-8") as f:
                 raw_data = yaml.safe_load(f) or {}
+
+            # Only override provider from env (model/api_key/api_base handled in LLMConfig.__init__)
+            if "llm" in raw_data and os.getenv("LLM_PROVIDER"):
+                raw_data["llm"]["provider"] = os.getenv("LLM_PROVIDER")
+
             _config = PipelineConfig.model_validate(raw_data)
         else:
             _config = PipelineConfig()

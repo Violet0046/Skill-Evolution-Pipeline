@@ -37,15 +37,18 @@ paths:
   prompts_dir: "prompts"
 
 # ── LLM ──────────────────────────────────────────────────────────────────────
+# Sensitive values (api_key, api_base) are read from .env file, not this file.
+# Environment variables take precedence:
+#   OPENAI_API_KEY, OPENAI_API_BASE, OPENAI_MODEL, LLM_PROVIDER
+#   ANTHROPIC_API_KEY, ANTHROPIC_MODEL
 llm:
-  provider: "openai"
+  provider: "openai"       # or "anthropic"
   model: "MiniMax-M2.7"
   max_tokens: 8192
   temperature: 0.0
   max_retries: 3
   retry_delay: 1.0
-  api_base: "http://10.239.226.8:9000/v1"
-  api_key: "sk-BZJ4EbDAttoZ4yX-PoLVaw"
+  # api_base and api_key should be set in .env
 
 # ── Extraction ───────────────────────────────────────────────────────────────
 extraction:
