@@ -68,6 +68,7 @@ class Logger:
     _lock = threading.Lock()
     _configured = False
     _registered: dict[str, logging.Logger] = {}
+    _log_file_path: Optional[str] = None  # Cache the log file path
 
     @classmethod
     def get_logger(cls, name: Optional[str] = None) -> logging.Logger:
@@ -135,8 +136,10 @@ class Logger:
             )
             target.setLevel(resolved_level)
 
+            # Close old handlers before removing to avoid file handle leaks
             for h in target.handlers[:]:
                 target.removeHandler(h)
+                h.close()
 
             color_ok = force_color or (use_colors and _supports_color())
             console_fmt = (
@@ -189,12 +192,36 @@ class Logger:
             for lg in cls._registered.values():
                 for h in lg.handlers[:]:
                     lg.removeHandler(h)
+                    h.close()  # Close handler to release file handles
+            # Also close root logger handlers
+            root = logging.getLogger()
+            for h in root.handlers[:]:
+                root.removeHandler(h)
+                h.close()
             cls._registered.clear()
             cls._configured = False
+            cls._log_file_path = None  # Clear cached path
 
     @classmethod
     def _default_log_file(cls) -> str:
-        """Generate default log file path organized by script name."""
+        """Generate default log file path organized by script name.
+
+        Returns a cached path after the first call to avoid creating
+        multiple empty log files.
+        Skips file creation when running under pytest.
+        """
+        if cls._log_file_path:
+            return cls._log_file_path
+
+        # Skip log file creation during tests (pytest sets __main__.__file__ to its own path)
+        try:
+            import __main__
+            main_file = getattr(__main__, "__file__", "") or ""
+            if "pytest" in main_file or "pytest" in sys.modules:
+                return ""
+        except Exception:
+            pass
+
         script_name = "skill_evolution"
         try:
             import __main__
@@ -205,7 +232,8 @@ class Logger:
 
         log_dir = Path(__file__).parent.parent.parent / "logs" / script_name
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        return str(log_dir / f"pipeline_{timestamp}.log")
+        cls._log_file_path = str(log_dir / f"pipeline_{timestamp}.log")
+        return cls._log_file_path
 
     @classmethod
     def _get_env_level(cls) -> int:

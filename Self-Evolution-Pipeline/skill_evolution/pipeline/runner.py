@@ -84,7 +84,7 @@ def run_extraction(config: PipelineConfig) -> list[CanonicalSession]:
             p = root / p
 
         if not p.exists():
-            logger.warning(f"File not found, skipping: {session_path}")
+            logger.debug(f"File not found, skipping: {session_path}")
             skipped += 1
             continue
 

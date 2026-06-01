@@ -26,6 +26,7 @@ from typing import Optional
 
 from skill_evolution.config.prompts import PromptLoader
 from skill_evolution.config.settings import LLMConfig
+from skill_evolution.config.constants import MAX_CONVERSATION_ROUNDS
 from skill_evolution.llm.base import LLMWithTools
 from skill_evolution.llm.prompts import EVOLUTION_COMPLETE, EVOLUTION_FAILED
 from skill_evolution.llm.tools import SESSION_TOOLS, SessionToolRegistry
@@ -303,6 +304,16 @@ class SkillEvolver:
         """Call LLM with tool-use support for examining sessions."""
         system_prompt = self._prompt_loader.load("evolution_system") if self._prompt_loader else ""
 
+        # Inject round limit info so LLM can self-manage its exploration budget
+        round_limit_hint = (
+            f"\n\n## Round Budget\n"
+            f"You have a maximum of {MAX_CONVERSATION_ROUNDS} rounds total (including this one). "
+            f"Each tool call costs 1 round. Your final text response also costs 1 round. "
+            f"Plan accordingly: if you use too many tool calls, you won't have a round left to produce output. "
+            f"Recommended: use 0-3 tool calls, then produce your edit immediately."
+        )
+        system_prompt = system_prompt + round_limit_hint
+
         # Use only evidence sessions for tools (not all sessions)
         registry = SessionToolRegistry(evidence_sessions)
         llm = LLMWithTools(self.config, tools=SESSION_TOOLS)
@@ -314,7 +325,7 @@ class SkillEvolver:
                 llm.register_tool(name, handler)
 
         messages = [{"role": "user", "content": user_prompt}]
-        return llm.run_conversation(system=system_prompt, messages=messages, max_rounds=5)
+        return llm.run_conversation(system=system_prompt, messages=messages, max_rounds=MAX_CONVERSATION_ROUNDS)
 
     def _build_fix_prompt(self, suggestion: EvolutionSuggestion, skill_content: str) -> str:
         """Build the FIX evolution prompt."""

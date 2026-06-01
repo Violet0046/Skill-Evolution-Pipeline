@@ -13,8 +13,6 @@ import json
 import time
 from typing import Callable, Optional
 
-import litellm
-
 from skill_evolution.config.settings import LLMConfig
 from skill_evolution.config.constants import (
     MAX_TOOL_RESULT_CHARS,
@@ -26,9 +24,24 @@ from skill_evolution.config.constants import (
 from skill_evolution.exceptions import LLMError, ErrorCode
 from skill_evolution.utils.logging import Logger
 
-# Suppress litellm debug logging
-litellm.suppress_debug_info = True
-litellm.set_verbose = False
+# Lazy import litellm (it takes ~9s to import)
+_litellm = None
+
+
+def _get_litellm():
+    """Lazy import litellm to avoid slow startup."""
+    global _litellm
+    if _litellm is None:
+        import litellm as _lm
+        _lm.suppress_debug_info = True
+        _lm.set_verbose = False
+        # Suppress litellm's own logger to avoid noisy completion/Completed Call lines
+        import logging as _logging
+        _logging.getLogger("LiteLLM").setLevel(_logging.WARNING)
+        _logging.getLogger("httpx").setLevel(_logging.WARNING)
+        _litellm = _lm
+    return _litellm
+
 
 logger = Logger.get_logger(__name__)
 
@@ -259,7 +272,7 @@ class LLMWithTools:
                 # Normalize messages for this round
                 round_messages = _normalize_messages_for_model(all_messages, self._normalized_model)
 
-                response = litellm.completion(
+                response = _get_litellm().completion(
                     **kwargs,
                     messages=round_messages,
                 )
@@ -369,7 +382,7 @@ class LLMWithTools:
 
         for attempt in range(self.config.max_retries):
             try:
-                response = litellm.completion(**kwargs)
+                response = _get_litellm().completion(**kwargs)
                 if response.choices:
                     return response.choices[0].message.content or ""
                 raise LLMError("No choices in response", code=ErrorCode.LLM_FATAL)
