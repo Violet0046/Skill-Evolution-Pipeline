@@ -34,6 +34,8 @@ from skill_evolution.models.proto_analysis import ProtoAnalysis
 from skill_evolution.llm.evidence_builder import EvidenceBuilder
 from skill_evolution.llm.evidence_analyzer import EvidenceAnalyzer, ExecutionAnalysis
 from skill_evolution.llm.skill_evolver import SkillEvolver
+from skill_evolution.llm.merge_engine import MergeEngine
+from skill_evolution.evolution.change_parser import load_change_dir
 from skill_evolution.exceptions import PipelineError, ErrorCode
 from skill_evolution.utils.logging import Logger
 
@@ -233,6 +235,60 @@ def run_evolution(
     return run_result
 
 
+# ── Stage 8 ──────────────────────────────────────────────────────────────────
+
+def run_merge(
+    config: PipelineConfig,
+    skill_content: str,
+    changes_dir: Path,
+    output_dir: Path,
+    prompt_loader: PromptLoader,
+    *,
+    enable_polish: bool = False,
+) -> Optional[object]:
+    """Stage 8: Merge .change files into SKILL.md.
+
+    Three-phase strategy:
+    1. Code static merge (deterministic)
+    2. LLM conflict resolution (only for conflicts)
+    3. LLM polish (optional)
+
+    Args:
+        config: Pipeline configuration
+        skill_content: Current SKILL.md content
+        changes_dir: Directory containing .change files
+        output_dir: Directory to write merged output
+        prompt_loader: Prompt template loader
+        enable_polish: Whether to enable Phase 3 polish
+
+    Returns:
+        MergeResult or None if no changes found
+    """
+    changes = load_change_dir(changes_dir)
+    if not changes:
+        logger.info("No .change files found — skipping merge")
+        return None
+
+    engine = MergeEngine(
+        config.llm,
+        prompt_loader=prompt_loader,
+        enable_polish=enable_polish,
+    )
+    result = engine.merge(skill_content, changes)
+
+    # Save outputs
+    merged_path = output_dir / "merged_SKILL.md"
+    merged_path.write_text(result.final_content, encoding="utf-8")
+    save_json(result.to_dict(), output_dir / "merge_result.json")
+
+    logger.info(f"Merge: {result.applied_count} applied, "
+                f"{result.conflict_count} conflict(s), "
+                f"polished={result.polished}")
+    logger.info(f"Merged output: {merged_path}")
+
+    return result
+
+
 # ── Pipeline Orchestration ───────────────────────────────────────────────────
 
 def run_pipeline(config: PipelineConfig, stage: str = "all") -> None:
@@ -363,6 +419,15 @@ def _run_pipeline_inner(
                 },
                 output_dir / "evolution_results.json",
             )
+
+        # Stage 8: Merge .change files into SKILL.md
+        changes_dir = staging_dir / "changes" / run_id
+        if changes_dir.is_dir():
+            merge_result = run_merge(
+                config, skill_content, changes_dir, output_dir, prompt_loader,
+            )
+            if merge_result:
+                save_json(merge_result.to_dict(), output_dir / "merge_result.json")
 
         logger.info(f"Analysis output: {output_dir / 'evidence_text.md'}")
         logger.info(f"Analysis output: {output_dir / 'execution_analysis.json'}")
@@ -507,6 +572,16 @@ def _run_skill_pipeline(
                 },
                 output_dir / "evolution_results.json",
             )
+
+        # Stage 8: Merge .change files into SKILL.md
+        changes_dir = staging_dir / "changes" / run_id
+        if changes_dir.is_dir():
+            merge_result = run_merge(
+                config, skill_content, changes_dir, output_dir, prompt_loader,
+            )
+            if merge_result:
+                save_json(merge_result.to_dict(), output_dir / "merge_result.json")
+
         return run_result
 
     return None

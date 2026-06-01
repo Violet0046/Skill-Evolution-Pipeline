@@ -1,0 +1,5 @@
+Polish the following SKILL.md file. Output only the polished content, no explanations.
+
+```
+{skill_content}
+```

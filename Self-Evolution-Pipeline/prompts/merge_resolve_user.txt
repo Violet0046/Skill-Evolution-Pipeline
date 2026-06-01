@@ -1,0 +1,17 @@
+## Conflict Location
+
+Anchor heading: `{anchor_heading}`
+
+## Current Section Content
+
+```
+{current_section}
+```
+
+## Conflicting Changes
+
+{change_descriptions}
+
+---
+
+Merge these changes into the current section. Output the complete merged section (including the heading).
