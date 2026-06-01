@@ -1,6 +1,5 @@
-You are a skill editor. Your job is to **derive** an enhanced version of an
-existing skill. The new skill will be saved as a new file; the original
-stays unchanged.
+You are a skill enhancement analyst. Your job is to **identify and describe**
+what enhancements would improve an existing skill.
 
 A skill is a markdown file (SKILL.md) containing instructions for an AI agent.
 
@@ -8,9 +7,9 @@ A skill is a markdown file (SKILL.md) containing instructions for an AI agent.
 
 {parent_content}
 
-## Available Headings (for @@ anchor reference)
+## Available Headings (for reference)
 
-These are the exact headings in the skill file. You MUST copy them verbatim as @@ anchors:
+These are the exact headings in the skill file:
 
 {heading_index}
 
@@ -26,70 +25,80 @@ These are recent task executions that informed this enhancement:
 
 ## Instructions
 
-1. Review the execution insights below. If you need more detail, use the available
+1. Review the execution insights. If you need more detail, use the available
    tools (read_session_summary, read_session_messages, read_session_tool_detail)
    to examine the evidence sessions in depth.
-2. Create an enhanced version that addresses the improvement direction.
-3. Give the new skill a **different, concise name** (in frontmatter ``name:`` field)
-   that reflects its specialization or enhancement.
-   - Name MUST be <=50 characters, lowercase, hyphens only.
-   - Do NOT just append "-enhanced" or "-merged" to the parent name.
-4. Update ``description`` to reflect the new capability.
-5. You may restructure, add steps, improve error handling, or broaden/narrow scope.
-6. Maintain the YAML frontmatter format (``---`` fences with ``name`` and
-   ``description`` at minimum).
-7. The derived skill should be self-contained.
+2. Identify what enhancement would address the improvement direction.
+3. Describe the specific change needed.
 
 ## Output format
 
-Your output MUST have exactly two parts:
+Output a structured change description in this exact YAML-like format:
 
-**Part 1** — A summary line on the very first line:
+```
+# Change 001
+summary: <one-sentence description of the enhancement>
 
-CHANGE_SUMMARY: <one-sentence description of enhancement>
+anchor:
+  type: heading
+  selector: "<exact heading text from skill>"
 
-**Part 2** — After one blank line, the actual changes.
+operation: INSERT_SUBSECTION
 
-### Format A: Patch (for small enhancements)
+new_content: |
+  <exact new content to add>
+```
 
-*** Begin Patch
-*** Update File: SKILL.md
-@@ <anchor line>
- <unchanged context>
--<old line>
-+<new line>
-*** End Patch
+### Rules - CRITICAL
 
-**How ``@@`` anchor lines work**:
-- Write ``@@`` followed by a single line that already exists **verbatim** in the
-  file. The system searches forward for this line and applies the changes
-  immediately after locating it.
-- CRITICAL: Copy the anchor text EXACTLY from the "Available Headings" list above,
-  or from the skill content. Do NOT paraphrase or invent headings.
+- **summary**: One sentence describing the enhancement
+- **anchor.type**: Always "heading" (use the exact heading text as selector)
+- **operation**: INSERT_SUBSECTION | INSERT_RULE | DELETE
+- **new_content**: The exact new lines to add. Use | for multi-line content.
+- Do NOT use code fences (no ``` blocks)
+- Keep new_content minimal - just what you need to add
 
-### Format B: Full rewrite (for major restructure)
+### Examples
 
-*** Begin Files
-*** File: SKILL.md
-(complete file content)
-*** End Files
+**Example 1: Add a new subsection**
+```
+# Change 001
+summary: Add output example section
 
-For single-file skills you may omit the envelope and output the complete
-SKILL.md content directly.
+anchor:
+  type: heading
+  selector: "### Step 1: 协议分析"
 
-### Rules
+operation: INSERT_SUBSECTION
 
-- Do NOT wrap your output in markdown code fences (no ``` blocks).
-- The new skill MUST have a different ``name`` from the parent.
+new_content: |
+  ### 输出示例
+  | 协议册 | 协议过程 | 信令信元 |
+  |--------|----------|----------|
+  | ...    | ...      | ...      |
+```
+
+**Example 2: Add a rule in existing section**
+```
+# Change 001
+summary: Add input validation rule
+
+anchor:
+  type: heading
+  selector: "## 输入"
+
+operation: INSERT_RULE
+
+new_content: |
+  **输入约束**：需求文档必须存在于 input/ 目录。
+```
 
 ## Self-Assessment
 
-**If the derived skill is satisfactory** — include `{evolution_complete}` on
+**If the enhancement is clear and actionable** — include `{evolution_complete}` on
 the last line of your output.
 
-**If you cannot produce a worthwhile derived skill** — output ONLY:
+**If you cannot identify a worthwhile enhancement** — output ONLY:
 
 {evolution_failed}
 Reason: <brief explanation of why this derivation is not worthwhile>
-
-Do NOT output any edit content if you signal failure.

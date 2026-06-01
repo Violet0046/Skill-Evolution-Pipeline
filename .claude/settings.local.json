@@ -23,7 +23,14 @@
       "Bash(python -m skill_evolution.pipeline.runner)",
       "Bash(python -c \"import sys,json; d=json.loads\\(sys.stdin.readline\\(\\)\\); print\\(d.get\\('sessionId',''\\), d.get\\('agentId',''\\)\\)\")",
       "Bash(python -c \"import sys,json; [print\\(json.loads\\(l\\)['session_path'][:50]\\) for l in sys.stdin]\")",
-      "Bash(python -m pytest tests/ -v --tb=short)"
+      "Bash(python -m pytest tests/ -v --tb=short)",
+      "Bash(python -c \"from skill_evolution.llm.skill_evolver import SkillEvolver; print\\('Import OK'\\)\")",
+      "Bash(conda run *)",
+      "Bash(unset http_proxy)",
+      "Bash(unset https_proxy)",
+      "Bash(unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY all_proxy ALL_PROXY)",
+      "Bash(conda activate *)",
+      "Bash(python -m py_compile skill_evolution/llm/skill_evolver.py)"
     ],
     "additionalDirectories": [
       "d:\\VS\\26project\\Self-Evolution-Pipeline\\协议分析-agent\\.claude\\skills"

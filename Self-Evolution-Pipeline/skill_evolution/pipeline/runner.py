@@ -205,13 +205,19 @@ def run_evolution(
     staging_dir: Path,
     prompt_loader: PromptLoader,
     sessions: Optional[list[CanonicalSession]] = None,
+    run_id: str | None = None,
 ) -> Optional[object]:
-    """Process evolution_suggestions serially -> new skill versions."""
+    """Process evolution_suggestions serially -> patch files in staging directory."""
     if not analysis.evolution_suggestions:
         logger.info("No evolution suggestions — skipping")
         return None
 
-    evolver = SkillEvolver(config.llm, prompt_loader=prompt_loader, sessions=sessions)
+    evolver = SkillEvolver(
+        config.llm,
+        prompt_loader=prompt_loader,
+        sessions=sessions,
+        run_id=run_id,
+    )
     run_result = evolver.evolve(
         analysis=analysis,
         skill_content=skill_content,
@@ -334,7 +340,7 @@ def _run_pipeline_inner(
 
         run_result = run_evolution(
             config, analysis, skill_content, skill_dir, staging_dir,
-            prompt_loader, sessions=evolution_set,
+            prompt_loader, sessions=evolution_set, run_id=run_id,
         )
 
         if run_result:
@@ -489,7 +495,7 @@ def _run_skill_pipeline(
 
         run_result = run_evolution(
             config, analysis, skill_content, skill_dir, staging_dir,
-            prompt_loader, sessions=evolution_set,
+            prompt_loader, sessions=evolution_set, run_id=run_id,
         )
 
         if run_result:

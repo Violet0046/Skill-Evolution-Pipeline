@@ -91,7 +91,7 @@ Self-Evolution-Pipeline/                    # 项目根目录
 │   ├── sessions.jsonl                      # session 索引（533 条）
 │   └── .claude/skills/协议分析-agent/
 │       └── SKILL.md                        # 技能定义文件
-└── skill-evolution/                        # 流水线（代码 + 输出）
+└── Self-Evolution-Pipeline/                # 流水线（代码 + 输出）
     ├── pyproject.toml
     ├── .env                                # API 密钥
     ├── configs/

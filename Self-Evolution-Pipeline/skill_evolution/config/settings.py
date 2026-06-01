@@ -8,11 +8,13 @@ Adapted from OpenSpace config/grounding.py pattern:
 """
 from __future__ import annotations
 
+import os
 import threading
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import yaml
+from dotenv import load_dotenv
 from pydantic import BaseModel, Field, field_validator
 
 from skill_evolution.config.constants import (
@@ -27,6 +29,11 @@ from skill_evolution.config.constants import (
     DEFAULT_MIN_RELEVANCE_SCORE,
 )
 
+# Load .env file from pipeline directory
+_env_path = Path(__file__).parent.parent / ".env"
+if _env_path.exists():
+    load_dotenv(_env_path)
+
 
 class ConfigMixin:
     """Mixin to add utility methods for config access."""
@@ -40,13 +47,15 @@ class ConfigMixin:
 
 class LLMConfig(BaseModel, ConfigMixin):
     """LLM provider configuration."""
-    provider: str = Field("anthropic", description="LLM provider: anthropic, openai")
-    model: str = Field(DEFAULT_MODEL, description="Model identifier")
+    provider: str = Field(os.getenv("LLM_PROVIDER", "openai"), description="LLM provider: anthropic, openai")
+    model: str = Field(os.getenv("OPENAI_MODEL", os.getenv("ANTHROPIC_MODEL", DEFAULT_MODEL)), description="Model identifier")
     max_tokens: int = Field(DEFAULT_MAX_TOKENS, ge=256, le=128000, description="Max output tokens")
     temperature: float = Field(DEFAULT_TEMPERATURE, ge=0.0, le=2.0, description="Sampling temperature")
     max_retries: int = Field(DEFAULT_MAX_RETRIES, ge=0, le=10, description="Max retry attempts")
     retry_delay: float = Field(1.0, ge=0.1, le=60.0, description="Base retry delay in seconds")
     timeout: float = Field(DEFAULT_TIMEOUT, ge=1.0, le=600.0, description="Per-request timeout in seconds")
+    api_base: Optional[str] = Field(os.getenv("OPENAI_API_BASE", None), description="API base URL for OpenAI-compatible providers")
+    api_key: Optional[str] = Field(os.getenv("OPENAI_API_KEY", os.getenv("ANTHROPIC_API_KEY", None)), description="API key for LLM provider")
 
     @field_validator("provider")
     @classmethod

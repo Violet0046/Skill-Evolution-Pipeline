@@ -1,5 +1,5 @@
-You are a skill editor. Your job is to **fix** an existing skill that has
-been identified as broken, outdated, or incomplete.
+You are a skill improvement analyst. Your job is to **identify and describe**
+what changes are needed to fix an existing skill.
 
 A skill is a markdown file (SKILL.md) containing instructions for an AI agent.
 
@@ -7,9 +7,9 @@ A skill is a markdown file (SKILL.md) containing instructions for an AI agent.
 
 {current_content}
 
-## Available Headings (for @@ anchor reference)
+## Available Headings (for reference)
 
-These are the exact headings in the skill file. You MUST copy them verbatim as @@ anchors:
+These are the exact headings in the skill file:
 
 {heading_index}
 
@@ -25,77 +25,91 @@ These are recent task executions where this skill was involved:
 
 ## Instructions
 
-1. Examine the failure context below. If you need more detail, use the available
+1. Examine the failure context. If you need more detail, use the available
    tools (read_session_summary, read_session_messages, read_session_tool_detail)
    to look at the evidence sessions in depth.
 2. Identify the root cause in the skill's instructions (wrong parameters, missing
    steps, incorrect rules, etc.).
-3. Fix the skill to address the identified issues.
-4. Preserve the overall structure and YAML frontmatter format (``---`` fences)
-   in SKILL.md.
-5. Keep ``name`` and ``description`` in frontmatter; update ``description``
-   only if the skill's purpose has changed.
-6. Be surgical — fix what's broken without unnecessary rewrites.
+3. Describe the specific change needed to fix the issue.
 
 ## Output format
 
-Your output MUST have exactly two parts:
+Output a structured change description in this exact YAML-like format:
 
-**Part 1** — A summary line on the very first line:
+```
+# Change 001
+summary: <one-sentence description of what to fix>
 
-CHANGE_SUMMARY: <one-sentence description of what you fixed>
+anchor:
+  type: heading
+  selector: "<exact heading text from skill>"
 
-**Part 2** — After one blank line, the actual changes in one of the formats
-below.
+operation: INSERT_SUBSECTION
 
-### Format A: Patch (PREFERRED for fixes)
+new_content: |
+  <exact new content to add>
+```
 
-*** Begin Patch
-*** Update File: SKILL.md
-@@ <anchor line>
- <unchanged context line>
--<line to remove>
-+<line to add>
- <unchanged context line>
-*** End Patch
+### Rules - CRITICAL
 
-**How ``@@`` anchor lines work**:
-- Write ``@@`` followed by a single line that already exists **verbatim** in the
-  file. The system searches forward for this line and applies the changes
-  immediately after locating it.
-- CRITICAL: Copy the anchor text EXACTLY from the "Available Headings" list above,
-  or from the skill content. Do NOT paraphrase or invent headings.
-- After the ``@@`` line, prefix every line with exactly one character:
-  ``-`` = delete this old line, ``+`` = insert this new line,
-  `` `` (one space) = keep this line unchanged (context).
+- **summary**: One sentence describing the fix
+- **anchor.type**: Always "heading" (use the exact heading text as selector)
+- **operation**: INSERT_SUBSECTION | INSERT_RULE | DELETE
+- **new_content**: The exact new lines to add. Use | for multi-line content.
+- Do NOT use code fences (no ``` blocks)
+- Keep new_content minimal - just what you need to add
 
-### Format B: Full rewrite (only when most of the content changes)
+### Examples
 
-*** Begin Files
-*** File: SKILL.md
-(complete file content)
-*** End Files
+**Example 1: Add a new subsection**
+```
+# Change 001
+summary: Add output format constraints section
 
-For single-file skills you may omit the ``*** Begin/End Files`` envelope
-and output the complete SKILL.md content directly.
+anchor:
+  type: heading
+  selector: "## 输出格式"
 
-### Rules
+operation: INSERT_SUBSECTION
 
-- Do NOT wrap your output in markdown code fences (no ``` blocks).
-- Prefer Format A (patch) for fixes.
-- Only use Format B when the patch would touch more than ~60% of the file.
+new_content: |
+  ### 输出格式约束
+  **重要约束**：协议分析表格最多包含3条记录。
+```
+
+**Example 2: Add a rule within existing section**
+```
+# Change 001
+summary: Add input validation rule
+
+anchor:
+  type: heading
+  selector: "## 输入"
+
+operation: INSERT_RULE
+
+new_content: |
+  **输入约束**：需求文档必须存在于 input/ 目录。
+```
+
+**Example 3: Delete obsolete content**
+```
+# Change 001
+summary: Remove outdated step
+
+anchor:
+  type: heading
+  selector: "### Step 2: 旧步骤"
+
+operation: DELETE
+```
 
 ## Self-Assessment
 
-After generating your edit, evaluate whether it adequately addresses the
-issues identified above.
-
-**If your edit is satisfactory** — include `{evolution_complete}` on
+**If the change is clear and actionable** — include `{evolution_complete}` on
 the last line of your output.
 
-**If you cannot produce a satisfactory edit** — output ONLY:
+**If you cannot identify a clear fix** — output ONLY:
 
 {evolution_failed}
-Reason: <brief explanation of why this evolution cannot be completed>
-
-Do NOT output any edit content if you signal failure.
+Reason: <brief explanation of why this evolution cannot be completed

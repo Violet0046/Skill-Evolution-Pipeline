@@ -38,12 +38,14 @@ paths:
 
 # ── LLM ──────────────────────────────────────────────────────────────────────
 llm:
-  provider: "anthropic"
-  model: "mimo-v2.5-pro"
+  provider: "openai"
+  model: "MiniMax-M2.7"
   max_tokens: 8192
   temperature: 0.0
   max_retries: 3
   retry_delay: 1.0
+  api_base: "http://10.239.226.8:9000/v1"
+  api_key: "sk-BZJ4EbDAttoZ4yX-PoLVaw"
 
 # ── Extraction ───────────────────────────────────────────────────────────────
 extraction:
