@@ -14,6 +14,7 @@ sessions.jsonl → [Extract] → [Filter] → [Split] → [ProtoExtract] → [Ev
   session_path → JSONL 文件                         证据文本          进化建议
                                                   (~1.5KB)        (fix/derived)
                                                                         ↓
+                                                                        ↓
                                                               staging/{skill_name}/
 ```
 

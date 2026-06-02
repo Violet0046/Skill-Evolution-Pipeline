@@ -6,15 +6,21 @@
 
 ## 目录
 
-1. [核心数据结构](#1-核心数据结构)
-2. [Stage 1: Extract](#2-stage-1-extract)
-3. [Stage 2: Filter](#3-stage-2-filter)
-4. [Stage 3: Split](#4-stage-3-split)
-5. [Stage 4: ProtoExtract](#5-stage-4-protoextract)
-6. [Stage 5: EvidenceBuild](#6-stage-5-evidencebuild)
-7. [Stage 6: Analyze](#7-stage-6-analyze)
-8. [Stage 7: Evolve](#8-stage-7-evolve)
-9. [完整数据流总览](#9-完整数据流总览)
+- [Pipeline 数据流详解](#pipeline-数据流详解)
+  - [目录](#目录)
+  - [1. 核心数据结构](#1-核心数据结构)
+    - [1.1 CanonicalSession — 标准化会话对象](#11-canonicalsession--标准化会话对象)
+    - [1.2 ProtoAnalysis — 轻量级摘要 (~500字节)](#12-protoanalysis--轻量级摘要-500字节)
+    - [1.3 EvolutionSuggestion — 进化建议](#13-evolutionsuggestion--进化建议)
+  - [2. Stage 1: Extract](#2-stage-1-extract)
+  - [3. Stage 2: Filter](#3-stage-2-filter)
+  - [4. Stage 3: Split](#4-stage-3-split)
+  - [5. Stage 4: ProtoExtract](#5-stage-4-protoextract)
+  - [6. Stage 5: EvidenceBuild](#6-stage-5-evidencebuild)
+  - [7. Stage 6: Analyze](#7-stage-6-analyze)
+  - [8. Stage 7: Evolve](#8-stage-7-evolve)
+  - [9. 完整数据流总览](#9-完整数据流总览)
+  - [附录: 数据结构关系图](#附录-数据结构关系图)
 
 ---
 
