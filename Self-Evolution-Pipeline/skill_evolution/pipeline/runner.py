@@ -626,6 +626,10 @@ def main() -> None:
         config.skill_name = args.skill
     if args.project_root:
         config.paths.project_root = args.project_root
+    if args.server_root:
+        config.paths.server_root = args.server_root
+    if args.skill_root:
+        config.paths.skill_root = args.skill_root
     if args.staging_dir:
         config.paths.staging_dir = args.staging_dir
     if hasattr(args, "skill_names") and args.skill_names:
@@ -640,6 +644,24 @@ def main() -> None:
     # Auto-detect project_root if not set
     if not config.paths.project_root:
         config.paths.project_root = str(get_pipeline_dir().parent)
+
+    # Handle --discover-all mode
+    discovered_skills = None
+    if getattr(args, "discover_all", False):
+        from skill_evolution.discovery import discover_skills, format_discovery_summary
+
+        if not config.paths.server_root:
+            logger.error("--discover-all requires --server-root")
+            sys.exit(1)
+
+        discovered_skills = discover_skills(config.paths.server_root)
+        print(format_discovery_summary(discovered_skills))
+
+        if discovered_skills.total_found == 0:
+            logger.error("No skills discovered from server-root")
+            sys.exit(1)
+
+        config.skill_names = discovered_skills.get_skill_names()
 
     # Determine mode: multi-skill or single-skill
     skill_names = config.get_skill_names()

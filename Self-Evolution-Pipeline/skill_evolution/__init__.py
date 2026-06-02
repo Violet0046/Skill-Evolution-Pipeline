@@ -8,16 +8,7 @@ Lazy-loading pattern adapted from OpenSpace __init__.py:
 from __future__ import annotations
 
 from importlib import import_module as _imp
-from typing import Any, Dict, TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from skill_evolution.config.settings import PipelineConfig as PipelineConfig
-    from skill_evolution.config.settings import LLMConfig as LLMConfig
-    from skill_evolution.llm.base import LLMWithTools as LLMWithTools
-    from skill_evolution.llm.evidence_analyzer import EvidenceAnalyzer as EvidenceAnalyzer
-    from skill_evolution.llm.skill_evolver import SkillEvolver as SkillEvolver
-    from skill_evolution.pipeline.runner import run_pipeline as run_pipeline
-    from skill_evolution.exceptions import PipelineError as PipelineError
+from typing import Any, Dict
 
 __version__ = "0.2.0"
 
@@ -61,7 +52,3 @@ def __getattr__(name: str) -> Any:
     value = getattr(module, name)
     globals()[name] = value
     return value
-
-
-def __dir__() -> list[str]:
-    return sorted(list(globals().keys()) + list(_attr_to_module.keys()))

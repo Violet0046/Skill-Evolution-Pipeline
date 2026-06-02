@@ -30,7 +30,15 @@
       "Bash(unset https_proxy)",
       "Bash(unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY all_proxy ALL_PROXY)",
       "Bash(conda activate *)",
-      "Bash(python -m py_compile skill_evolution/llm/skill_evolver.py)"
+      "Bash(python -m py_compile skill_evolution/llm/skill_evolver.py)",
+      "Bash(sshpass -p 'Y!dj9462' ssh -o StrictHostKeyChecking=no root@10.89.246.60 \"ls -la /home/openviking_disk/viking/design/resources/\")",
+      "Bash(sshpass -p 'Y!dj9462' ssh -o StrictHostKeyChecking=no root@10.89.246.60 \"cat /home/openviking_disk/viking/design/resources/design/10033581/skill.md\")",
+      "Bash(sshpass *)",
+      "Bash(sudo sshfs -o reconnect,allow_other,default_permissions,IdentityFile=/dev/null,StrictHostKeyChecking=no -o sshfs_debug root@10.89.246.60:/home/openviking_disk/ /home/openviking_disk/)",
+      "Bash(mount)",
+      "Bash(sudo fusermount -u /home/openviking_disk)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('session_path:', d['session_path']\\)\")",
+      "Bash(./scripts/mount_viking.sh status *)"
     ],
     "additionalDirectories": [
       "d:\\VS\\26project\\Self-Evolution-Pipeline\\协议分析-agent\\.claude\\skills"

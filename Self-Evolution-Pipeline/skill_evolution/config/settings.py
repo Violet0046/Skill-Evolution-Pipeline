@@ -133,6 +133,8 @@ class EvaluationConfig(BaseModel, ConfigMixin):
 class PathConfig(BaseModel, ConfigMixin):
     """Path configuration — all paths are relative to project_root unless absolute."""
     project_root: str = Field("", description="Project root directory")
+    server_root: str = Field("", description="Server root directory for skill discovery")
+    skill_root: str = Field("", description="Local root directory containing SKILL.md files")
 
     # Input paths
     session_glob: str = Field("agent-*.jsonl", description="Glob pattern for session JSONL files")
@@ -174,6 +176,27 @@ class PathConfig(BaseModel, ConfigMixin):
             raise ValueError("project_root is not set. Provide via config or --project-root flag.")
         return Path(self.project_root)
 
+    def get_server_root(self) -> Optional[Path]:
+        """Get the server root as a Path (may be None if not set)."""
+        if not self.server_root:
+            return None
+        return Path(self.server_root)
+
+    def get_data_root(self) -> Path:
+        """Get the data root (server_root if set, else project_root)."""
+        if self.server_root:
+            return Path(self.server_root)
+        return self.get_project_root()
+
+    def get_skill_root(self) -> Path:
+        """Get the skill root directory containing SKILL.md files.
+
+        If skill_root is not set, falls back to project_root.
+        """
+        if self.skill_root:
+            return Path(self.skill_root)
+        return self.get_project_root()
+
     def get_folder_name(self, skill_name: str) -> str:
         """Map skill_name to on-disk folder name."""
         return self.skill_folder_map.get(skill_name, skill_name)
@@ -183,14 +206,36 @@ class PathConfig(BaseModel, ConfigMixin):
         return sorted(self.get_project_root().glob(self.session_glob))
 
     def resolve_session_index(self, skill_name: str) -> Path:
-        """Resolve the sessions.jsonl index path for a given skill."""
+        """Resolve the sessions.jsonl index path for a given skill.
+
+        Uses server_root if set, otherwise project_root.
+        Searches in both agents/ and skills/ subdirectories.
+        """
         folder_name = self.get_folder_name(skill_name)
+
+        # Try server_root structure first (agents/ and skills/ subdirectories)
+        data_root = self.get_data_root()
+
+        # Check agents/{skill_name}/sessions.jsonl
+        agents_path = data_root / "agents" / folder_name / "sessions.jsonl"
+        if agents_path.exists():
+            return agents_path
+
+        # Check skills/{skill_name}/sessions.jsonl
+        skills_path = data_root / "skills" / folder_name / "sessions.jsonl"
+        if skills_path.exists():
+            return skills_path
+
+        # Fallback to old behavior (direct in project_root/{folder_name}/)
         raw = self.session_index.format(skill_name=skill_name, folder_name=folder_name)
         return self._resolve_path(raw)
 
     def resolve_skill_dir(self, skill_name: str) -> Optional[Path]:
-        """Find the directory containing SKILL.md for the given skill."""
-        root = self.get_project_root()
+        """Find the directory containing SKILL.md for the given skill.
+
+        Uses skill_root if set, otherwise project_root.
+        """
+        root = self.get_skill_root()
         folder_name = self.get_folder_name(skill_name)
         for template in self.skill_search_paths:
             raw = template.format(skill_name=skill_name, folder_name=folder_name)

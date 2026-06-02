@@ -95,6 +95,18 @@ def _add_run_args(parser: argparse.ArgumentParser) -> None:
         help="Project root directory (overrides config)",
     )
     parser.add_argument(
+        "--server-root", default=None,
+        help="Server root directory for sessions.jsonl (overrides project-root)",
+    )
+    parser.add_argument(
+        "--skill-root", default=None,
+        help="Local root directory containing SKILL.md files",
+    )
+    parser.add_argument(
+        "--discover-all", action="store_true",
+        help="Discover all skills from server-root and process them",
+    )
+    parser.add_argument(
         "--staging-dir", default=None,
         help="Staging directory for evolved skills (overrides config)",
     )
