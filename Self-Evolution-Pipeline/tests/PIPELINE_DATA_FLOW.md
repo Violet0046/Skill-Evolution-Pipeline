@@ -19,6 +19,7 @@
   - [6. Stage 5: EvidenceBuild](#6-stage-5-evidencebuild)
   - [7. Stage 6: Analyze](#7-stage-6-analyze)
   - [8. Stage 7: Evolve](#8-stage-7-evolve)
+  - [8. Stage 8: Merge](#8-stage-8-merge)
   - [9. 完整数据流总览](#9-完整数据流总览)
   - [附录: 数据结构关系图](#附录-数据结构关系图)
 
@@ -540,6 +541,140 @@ new_content: |
 
 ---
 
+## 8. Stage 8: Merge
+
+**函数**: `MergeEngine.merge()` / `run_merge()`
+
+**输入**:
+- `skill_content: str` — 当前 SKILL.md 的内容
+- `changes_dir: Path` — 包含 .change 文件的目录 (Stage 7 输出)
+- `output_dir: Path` — 合并结果输出目录
+
+**三阶段合并策略**:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  阶段1: 代码静态合并 (全自动, 确定性)                         │
+│  ─────────────────────────────────────────────────────────  │
+│  .change 文件 → 解析 → 锚点匹配 (fuzzy_find_match) → 直接应用 │
+│                                                              │
+│  operation 类型:                                              │
+│  - INSERT_SUBSECTION: 在锚点章节末尾插入新内容                │
+│  - INSERT_RULE: 在锚点标题下一行插入                          │
+│  - DELETE: 删除锚点章节                                       │
+│  - REPLACE: 替换锚点章节内容                                  │
+│                                                              │
+│  如果锚点找不到或有冲突 ↓                                      │
+└─────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────┐
+│  阶段2: LLM 局部融合 (仅处理冲突)                             │
+│  ─────────────────────────────────────────────────────────  │
+│  冲突章节 + 冲突 change 描述 → LLM → 融合后内容               │
+│                                                              │
+│  冲突类型:                                                    │
+│  - delete_vs_insert: 同锚点有删除又有插入                     │
+│  - multiple_inserts: 多个同锚点插入 (按序执行)                │
+│  - anchor_not_found: 锚点标题找不到                           │
+│                                                              │
+│  全部合并完成后 ↓                                             │
+└─────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────┐
+│  阶段3: LLM 全文润色 (可选)                                   │
+│  ─────────────────────────────────────────────────────────  │
+│  合并后 SKILL.md → LLM → 排版优化、去重、风格统一              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**代码静态合并示例**:
+
+```python
+# 001.change 内容
+"""
+# Change 001
+summary: 添加文件读取前的存在性检查
+
+anchor:
+  type: heading
+  selector: "## 文件读取规范"
+
+operation: INSERT_SUBSECTION
+
+new_content: |
+  ### 存在性检查
+  在调用 Read 工具前，先验证文件存在。
+"""
+
+# 原始 SKILL.md
+"""
+## 文件读取规范
+
+本节介绍文件读取的规范流程。
+
+### 读取步骤
+1. 确认文件路径
+2. 调用 Read 工具
+"""
+
+# 合并后
+"""
+## 文件读取规范
+
+本节介绍文件读取的规范流程。
+
+### 读取步骤
+1. 确认文件路径
+2. 调用 Read 工具
+
+### 存在性检查
+在调用 Read 工具前，先验证文件存在。
+"""
+```
+
+**输出**: `MergeResult`
+
+```python
+MergeResult(
+    final_content="更新后的完整 SKILL.md 内容...",
+    applied_count=2,        # 成功应用的数量
+    conflict_count=0,       # 冲突数量 (阶段2已解决)
+    polished=False,         # 是否经过阶段3润色
+    diff="--- SKILL.md (original)\n+++ SKILL.md (merged)\n...",  # unified diff
+)
+```
+
+**生成的文件**:
+
+```
+output/staging/protocol-agent/
+├── changes/run_20260601_100000/
+│   ├── 001.change          ← Stage 7 生成的变更文件
+│   ├── 002.change
+│   └── versions.json
+└── merged/
+    ├── merged_SKILL.md     ← Stage 8 最终合并结果
+    └── merge_result.json   ← 合并统计信息
+```
+
+**merge_result.json 内容**:
+
+```json
+{
+  "applied_count": 2,
+  "conflict_count": 0,
+  "polished": false,
+  "diff_lines": 15
+}
+```
+
+**数据变化**:
+- 阶段1: N个 .change 文件 → 代码直接应用 → 部分成功
+- 阶段2: 冲突内容 → LLM 融合 → 全部解决
+- 阶段3: 合并内容 → LLM 润色 → 格式优化
+
+---
+
 ## 9. 完整数据流总览
 
 ```
@@ -593,9 +728,14 @@ N个 .change 文件 (原子变更)
     │  001.change: "添加文件存在性检查"
     │  002.change: "创建通用协议解析模板"
     │
-    ▼ (后续流程: merge LLM 将 .change 应用到 SKILL.md)
+    ▼ Stage 8: MergeEngine.merge() ← 三阶段合并
+    │  ├── 阶段1: 代码静态合并 (确定性的)
+    │  ├── 阶段2: LLM 解决冲突 (仅冲突时)
+    │  └── 阶段3: LLM 全文润色 (可选)
     │
-最终的 SKILL.md (更新后的技能文件)
+merged_SKILL.md (更新后的技能文件)
+    │
+    ▼ (后续流程: 人工审核 → 确认后替换原 SKILL.md)
 ```
 
 ---

@@ -1,0 +1,199 @@
+{
+  "skill_name": "查询需求信息",
+  "total_sessions": 198,
+  "success_count": 191,
+  "retry_success_count": 2,
+  "failed_count": 5,
+  "success_rate": 0.965,
+  "dominant_patterns": [
+    {
+      "pattern": "Skill 作为阶段1需求澄清的首个技能被调用，接收需求ID参数（如RAN-1995001），通过Bash执行Python脚本查询需求基础信息",
+      "frequency": 198,
+      "impact": "high",
+      "evidence": [
+        "08767333-864",
+        "b33bffe9-ee3",
+        "c714edf7-0d6",
+        "776b5c6e-f9c",
+        "c03d2996-4c7"
+      ]
+    },
+    {
+      "pattern": "Bash调用Python脚本时使用source .env读取认证信息，脚本路径拼接在.claude/skills/查询需求信息/scripts/目录下",
+      "frequency": 198,
+      "impact": "high",
+      "evidence": [
+        "08767333-864",
+        "776b5c6e-f9c",
+        "c03d2996-4c7",
+        "f4e2f76c-72e",
+        "4596254f-e55"
+      ]
+    },
+    {
+      "pattern": "查询成功后输出需求基本信息（标题、描述、算法文档链接、需求分析文档链接），供后续阶段使用",
+      "frequency": 191,
+      "impact": "high",
+      "evidence": [
+        "b33bffe9-ee3",
+        "c714edf7-0d6",
+        "776b5c6e-f9c",
+        "c03d2996-4c7",
+        "f4e2f76c-72e"
+      ]
+    },
+    {
+      "pattern": "当.env文件不存在或Token无效时，脚本执行失败并输出Token验证失败错误",
+      "frequency": 5,
+      "impact": "medium",
+      "evidence": [
+        "08767333-864",
+        "c03d2996-4c7",
+        "f4e2f76c-72e",
+        "4596254f-e55",
+        "088c4041-cf9"
+      ]
+    },
+    {
+      "pattern": "Python脚本路径在Bash命令中被截断，导致脚本无法找到或执行失败",
+      "frequency": 5,
+      "impact": "medium",
+      "evidence": [
+        "08767333-864",
+        "f4e2f76c-72e",
+        "4596254f-e55",
+        "088c4041-cf9",
+        "19e3f91c-0ff"
+      ]
+    }
+  ],
+  "failure_analysis": {
+    "root_causes": [
+      {
+        "cause": "Token验证失败：.env文件中的认证信息无效或过期，导致查询需求信息脚本无法通过API认证",
+        "frequency": 3,
+        "affected_sessions": [
+          "08767333-864",
+          "c03d2996-4c7",
+          "f4e2f76c-72e"
+        ],
+        "category": "tool_misuse"
+      },
+      {
+        "cause": "Python脚本路径拼接错误或被截断，Bash命令中的脚本路径不完整导致文件未找到",
+        "frequency": 2,
+        "affected_sessions": [
+          "4596254f-e55",
+          "088c4041-cf9"
+        ],
+        "category": "tool_misuse"
+      }
+    ],
+    "common_errors": [
+      "Token验证失败（Token验证失败、Unable to connect to API）",
+      "Python脚本路径截断导致文件未找到（python /home/.../查询需求信息/ 后无完整路径）",
+      "pip install requests 依赖安装后仍无法解决认证问题"
+    ]
+  },
+  "skill_gaps": [
+    {
+      "gap": "缺少对.env文件存在性的前置检查和友好的错误提示",
+      "evidence": "多个会话显示当.env不存在时，脚本直接失败而非给出清晰的配置指引",
+      "priority": "high"
+    },
+    {
+      "gap": "缺少对Token有效性的自动校验和刷新机制",
+      "evidence": "会话中频繁出现Token过期导致的失败，且失败后需要手动重新执行uac_login.sh",
+      "priority": "high"
+    },
+    {
+      "gap": "Python脚本路径依赖硬编码的绝对路径，缺乏环境适配能力",
+      "evidence": "不同会话的工作目录不同（/home/10103128@zte.intra, /media/vdb1/00-AI, /media/vdc/sdd等），但脚本路径拼接方式固定",
+      "priority": "medium"
+    },
+    {
+      "gap": "缺少对需求ID格式的校验（如RAN-开头、长度限制等）",
+      "evidence": "会话中传入的需求ID格式不一致可能导致API查询失败",
+      "priority": "low"
+    }
+  ],
+  "evolution_suggestions": [
+    {
+      "type": "fix",
+      "direction": "在查询脚本开头增加.env文件存在性检查，若文件不存在则输出清晰的配置指引（提示需要先执行初始化技能获取认证信息），而非直接抛出Token验证失败",
+      "target_skills": [
+        "查询需求信息"
+      ],
+      "category": "workflow",
+      "evidence_sessions": [
+        "08767333-864",
+        "c03d2996-4c7"
+      ],
+      "evidence_session_paths": [
+        "/home/openviking_disk/viking/design/resources/design/10103128/projects/-home-10103128-zte-intra-sdd-01------ran-design-sdd-test--------ran-sdd-02-SDD------iMate-masterAgent-----Agent/08767333-864d-4ee6-bead-bb15f001a1fa.jsonl",
+        "/home/openviking_disk/viking/design/resources/design/10293402/projects/-media-vdc-sdd-AIIDE-workbench-02-SDD------iMate-masterAgent-AIDE/c03d2996-4c76-41d5-9d0b-e7bc8d646762.jsonl"
+      ]
+    },
+    {
+      "type": "fix",
+      "direction": "修复Bash命令中Python脚本路径拼接逻辑，使用相对路径或从环境变量获取基础路径，避免路径被截断导致文件未找到错误",
+      "target_skills": [
+        "查询需求信息"
+      ],
+      "category": "tool_guide",
+      "evidence_sessions": [
+        "08767333-864",
+        "f4e2f76c-72e",
+        "4596254f-e55"
+      ],
+      "evidence_session_paths": [
+        "/home/openviking_disk/viking/design/resources/design/10103128/projects/-home-10103128-zte-intra-sdd-01------ran-design-sdd-test--------ran-sdd-02-SDD------iMate-masterAgent-----Agent/08767333-864d-4ee6-bead-bb15f001a1fa.jsonl",
+        "/home/openviking_disk/viking/design/resources/design/10103128/projects/-home-10103128-zte-intra-sdd-01------ran-design-sdd-test----ran-sdd-02-SDD------iMate-masterAgent-----Agent/f4e2f76c-72e5-418f-af37-fa6acda4218d.jsonl",
+        "/home/openviking_disk/viking/design/resources/design/10103128/projects/-home-10103128-zte-intra-sdd-01------ran-design-sdd-test----ran-sdd-02-SDD------iMate-masterAgent-----Agent/4596254f-e55f-4f13-9aa4-c486efb31f1c.jsonl"
+      ]
+    },
+    {
+      "type": "derived",
+      "direction": "增加Token有效性自动校验逻辑，在脚本执行前先调用轻量级API验证Token有效性，若无效则提示用户重新执行初始化技能获取新Token，而非等到API调用时才发现失败",
+      "target_skills": [
+        "查询需求信息"
+      ],
+      "category": "workflow",
+      "evidence_sessions": [
+        "c03d2996-4c7",
+        "f4e2f76c-72e",
+        "088c4041-cf9"
+      ],
+      "evidence_session_paths": [
+        "/home/openviking_disk/viking/design/resources/design/10293402/projects/-media-vdc-sdd-AIIDE-workbench-02-SDD------iMate-masterAgent-AIDE/c03d2996-4c76-41d5-9d0b-e7bc8d646762.jsonl",
+        "/home/openviking_disk/viking/design/resources/design/10103128/projects/-home-10103128-zte-intra-sdd-01------ran-design-sdd-test----ran-sdd-02-SDD------iMate-masterAgent-----Agent/f4e2f76c-72e5-418f-af37-fa6acda4218d.jsonl",
+        "/home/openviking_disk/viking/design/resources/design/10103128/projects/-home-10103128-zte-intra-sdd-01------ran-design-sdd-test----ran-sdd-02-SDD------iMate-masterAgent-----Agent/088c4041-cf9d-4246-81b3-f2521645c81d.jsonl"
+      ]
+    },
+    {
+      "type": "derived",
+      "direction": "增加需求ID格式校验，在查询前验证ID符合RAN-数字格式，提升错误发现的及时性并给出友好提示",
+      "target_skills": [
+        "查询需求信息"
+      ],
+      "category": "tool_guide",
+      "evidence_sessions": [
+        "c03d2996-4c7",
+        "f4e2f76c-72e"
+      ],
+      "evidence_session_paths": [
+        "/home/openviking_disk/viking/design/resources/design/10293402/projects/-media-vdc-sdd-AIIDE-workbench-02-SDD------iMate-masterAgent-AIDE/c03d2996-4c76-41d5-9d0b-e7bc8d646762.jsonl",
+        "/home/openviking_disk/viking/design/resources/design/10103128/projects/-home-10103128-zte-intra-sdd-01------ran-design-sdd-test----ran-sdd-02-SDD------iMate-masterAgent-----Agent/f4e2f76c-72e5-418f-af37-fa6acda4218d.jsonl"
+      ]
+    }
+  ],
+  "execution_efficiency": {
+    "avg_tokens": 2753352,
+    "avg_duration_seconds": 9908.0,
+    "bottleneck_tools": [
+      "Bash",
+      "Agent",
+      "Task"
+    ]
+  }
+}

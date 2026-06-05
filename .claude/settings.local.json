@@ -38,7 +38,11 @@
       "Bash(mount)",
       "Bash(sudo fusermount -u /home/openviking_disk)",
       "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('session_path:', d['session_path']\\)\")",
-      "Bash(./scripts/mount_viking.sh status *)"
+      "Bash(./scripts/mount_viking.sh status *)",
+      "Bash(python3)",
+      "Bash(python3 -m json.tool)",
+      "Bash(python3 -c ' *)",
+      "Bash(python3 generate_analysis.py)"
     ],
     "additionalDirectories": [
       "d:\\VS\\26project\\Self-Evolution-Pipeline\\协议分析-agent\\.claude\\skills"
